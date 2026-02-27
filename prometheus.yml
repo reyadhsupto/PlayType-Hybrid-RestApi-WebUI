@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: "playwright-metrics"
+    static_configs:
+      - targets: ["metrics-server:9464"]
+
+
+

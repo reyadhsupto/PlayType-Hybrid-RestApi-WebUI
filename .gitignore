@@ -137,3 +137,13 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+#local rerports
+allure-report/*
+allure-results/*
+reports/*
+playwright-report/*
+test-results/*
+
+#config runtime
+runtime-config.json

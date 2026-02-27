@@ -1,0 +1,17 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+# Copy the entire repo (including metrics + tsconfig)
+COPY . .
+
+# Compile TypeScript → JS into /app/dist
+RUN npx tsc
+
+EXPOSE 9464
+
+# Always run compiled JS
+CMD ["node", "dist/metrics/server.js"]
