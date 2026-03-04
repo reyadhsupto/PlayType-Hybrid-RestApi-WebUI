@@ -1,10 +1,6 @@
 # Hybrid(RestApi + WebUi) Automation Framework Using Playwright & Typescript
 Core Rest Api Automation framework leveraging Playwright, Typescript, Allure, Zod, Makefile, Prometheus, Grafana, Docker etc.
-
-# PlayType-Api-Framework
-
-This is a Playwright-based API automation framework for testing REST APIs.  
-It follows an OOP structure with a **BaseTest** class, **Service classes** (like POM/SOM for APIs), **validators**, and **data generators** for dynamic payloads.
+It follows an OOP structure with a **BaseTest** class for both api and ui, **Service/Page classes** (like POM/SOM for APIs and UIs), **validators**, and **data generators** for dynamic payloads, **Fixtures** for dynamicity.
 
 ---
 

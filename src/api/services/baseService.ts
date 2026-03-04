@@ -82,6 +82,7 @@ export abstract class BaseService {
    *   });
    *
    * @param options - DirectCallOptions (url [full URL required], method, headers, params, data)
+   * Uses same requestcontext
    * @returns APIResponse
    */
   protected async callDirectApi(options: DirectCallOptions): Promise<APIResponse> {
