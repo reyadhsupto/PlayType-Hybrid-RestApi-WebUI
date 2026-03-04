@@ -3,60 +3,21 @@
 import { APIRequestContext, APIResponse } from "@playwright/test";
 import { logger } from "../sharedUtils/logger.js";
 
-/**
- * ApiRequestOptions defines allowed inputs for an API request.
- * - `path_param` must include the endpoint path. It can start with "/" or not.
- * - `method` is restricted to HTTP verbs used in REST.
- * - `headers` allows passing custom request headers.
- * - `query_params` supports string, URLSearchParams, or key/value object formats.
- * - `payload` is the request body; accepts JSON (object) or raw string.
- */
 export interface ApiRequestOptions {
-  path_param: string; // e.g. "/posts"
+  path_param: string;
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   headers?: Record<string, string>;
   query_params?: string | URLSearchParams | Record<string, string | number | boolean>;
-  payload?: object | string; // JSON or raw body
+  payload?: object | string;
 }
 
-/**
- * ApiClient wraps Playwright's APIRequestContext to simplify API calls.
- * - Injected with base URL and request context instance from Playwright.
- * - Automatically handles:
- *    - Query params (string, object, or URLSearchParams)
- *    - JSON serialization
- *    - Logging request/response to console/log file
- *    - Ensuring correct path formatting
- *
- * Usage example:
- * ```
- * const apiClient = new ApiClient(request, "https://api.example.com");
- *
- * const response = await apiClient.callApi({
- *   path_param: "/v1/users",
- *   method: "POST",
- *   payload: { name: "john" }
- * });
- *
- * expect(response.status()).toBe(201);
- * ```
- */
+export type DirectCallOptions = Omit<ApiRequestOptions, 'path_param'> & {
+  url: string;
+};
+
 export class ApiClient {
   constructor(private requestContext: APIRequestContext, private baseUrl: string) {}
 
-  /**
-   * Executes an HTTP API call using Playwright request context.
-   *
-   * @param options - Configuration object containing:
-   *   - path_param: API path (with or without `/`)
-   *   - method: HTTP method (GET, POST, PUT, PATCH, DELETE)
-   *   - headers: (optional) additional headers
-   *   - query_params: (optional) query parameters
-   *   - payload: (optional) request body (for POST / PUT / PATCH)
-   *
-   * @returns Promise<APIResponse>
-   * - Caller can extract JSON using `await response.json()`
-   */
   async callApi(options: ApiRequestOptions): Promise<APIResponse> {
     const path_param = options.path_param.startsWith("/")
       ? options.path_param
@@ -77,8 +38,7 @@ export class ApiClient {
 
     const endpoint = `${this.baseUrl}${path_param}${queryString}`;
 
-    // Logging request
-    logger.info(`Api Endpoint: ${options.method.toUpperCase()} - ${endpoint}`);
+    logger.info(`[Context] Api Endpoint: ${options.method.toUpperCase()} - ${endpoint}`);
     if (options.headers) {
       logger.debug(`Request Headers: ${JSON.stringify(options.headers, null, 2)}`);
     }
@@ -86,7 +46,6 @@ export class ApiClient {
       logger.debug(`Request Payload: ${JSON.stringify(options.payload, null, 2)}`);
     }
 
-    // Making request
     try {
       const response = await this.requestContext.fetch(path_param, {
         method: options.method,
@@ -106,6 +65,90 @@ export class ApiClient {
     } catch (err) {
       logger.error(`Error calling API; Stacktrace :-> ${err}`);
       throw err;
+    }
+  }
+
+  /**
+   * Direct HTTP call - uses the SAME requestContext but ignores baseURL
+   * Just like request.get(), request.post() etc. in Playwright tests
+   */
+  async callDirectApi(options: DirectCallOptions): Promise<APIResponse> {
+    const { url, method, headers, query_params, payload } = options;
+
+    logger.info(`[One Off] Api Endpoint: ${method.toUpperCase()} -  ${url}`);
+    if (headers) {
+      logger.debug(`Request Headers: ${JSON.stringify(headers, null, 2)}`);
+    }
+    if (query_params) {
+      logger.debug(`Query Params: ${JSON.stringify(query_params, null, 2)}`);
+    }
+    if (payload && ["POST", "PUT", "PATCH"].includes(method.toUpperCase())) {
+      logger.debug(` Request Payload: ${JSON.stringify(payload, null, 2)}`);
+    }
+
+    try {
+      let response: APIResponse;
+
+      // Use the requestContext's methods directly - just like request.get() in Playwright
+      switch (method.toUpperCase()) {
+        case "GET":
+          response = await this.requestContext.get(url, { 
+            headers, 
+            params: query_params 
+          });
+          break;
+        case "POST":
+          response = await this.requestContext.post(url, {
+            headers: { "Content-Type": "application/json", ...(headers || {}) },
+            params: query_params,
+            data: payload,
+          });
+          break;
+        case "PUT":
+          response = await this.requestContext.put(url, {
+            headers: { "Content-Type": "application/json", ...(headers || {}) },
+            params: query_params,
+            data: payload,
+          });
+          break;
+        case "PATCH":
+          response = await this.requestContext.patch(url, {
+            headers: { "Content-Type": "application/json", ...(headers || {}) },
+            params: query_params,
+            data: payload,
+          });
+          break;
+        case "DELETE":
+          response = await this.requestContext.delete(url, { 
+            headers, 
+            params: query_params 
+          });
+          break;
+        default:
+          throw new Error(`Unsupported HTTP method: ${method}`);
+      }
+
+      await this.logResponse(response);
+      return response;
+    } catch (err) {
+      logger.error(`Direct ${method.toUpperCase()} failed: ${err}`);
+      throw err;
+    }
+  }
+
+  private async logResponse(response: APIResponse): Promise<void> {
+    logger.info(`Response Status: ${response.status()}`);
+
+    try {
+      const responseBody = await response.json();
+      logger.debug(`Response Body: ${JSON.stringify(responseBody, null, 2)}`);
+    } catch {
+      try {
+        const responseText = await response.text();
+        logger.debug(`Response Body (text): ${responseText}`);
+      } catch {
+        logger.debug(`Response Body: [Unable to parse]`);
+      }
     }
   }
 }

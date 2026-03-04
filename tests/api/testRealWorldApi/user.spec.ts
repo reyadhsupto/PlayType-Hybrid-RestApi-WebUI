@@ -1,3 +1,5 @@
+// tests/api/testRealWorldApi/user.spec.ts
+
 import { test } from "@playwright/test";
 import { BaseTest } from "../../BaseApiTest.js";
 import { registerUserSchemaZod, loginUserSchema } from "../schemas.js"
@@ -37,5 +39,17 @@ test.describe( "Register, login user, update user", { tag: ['@SC_001'] }, ()=>{
     await BaseTest.rw.assertStatus(response, 200);
     await BaseTest.rw.validateField(response, "user.email", email);
     await BaseTest.rw.validateZodSchema(response , loginUserSchema);
+  });
+});
+
+test.describe( "Check direct api call", { tag: ['@SC_002'] }, ()=>{
+    test("Verify that Api returns all user list with 200 OK", {tag: ["@TC_003"]}, async () => {
+    BaseTest.logTestTitle("Test Details:", test.info().title);
+      const response = await BaseTest.apiClient.callDirectApi({
+      url: 'https://api.restful-api.dev/objects',
+      method: 'GET'
+    });
+    await BaseTest.rw.assertStatus(response, 200);
+
   });
 });
