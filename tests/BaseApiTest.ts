@@ -1,9 +1,9 @@
 // tests/BaseApiTest.ts
 
-import { request, APIRequestContext } from "@playwright/test";
+import { test as base, request, APIRequestContext } from "@playwright/test";
 import { ApiClient } from "../src/api/client.js";
 import { DatabaseService } from "../src/sharedUtils/dbClient.js";
-import { logger, runLogFile } from "../src/sharedUtils/logger.js";
+import { logger } from "../src/sharedUtils/logger.js";
 import { Validator } from "../src/api/validator.js";
 import { DataGenerator } from "../src/api/apiUtils/payloadGenerator.js";
 import { realWorldService } from "../src/api/services/realWorld/realWorldEndpoints.js";
@@ -13,6 +13,7 @@ import * as allure from "allure-js-commons";
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Load config from Consul if enabled
 let envConfig = config;
 if(config.useConsul){
     const runtimeConfigPath = path.join(process.cwd(), "runtime-config.json");
@@ -20,174 +21,221 @@ if(config.useConsul){
 }
 
 /**
- * Manages api test setup, teardown, and provides access to services and utilities.
+ * Options that can be configured per test or test file.
  * 
+ * @interface TestOptions
+ * @property {string} baseURL - Base URL for API requests (default from config)
+ * @property {Record<string, string>} extraHTTPHeaders - Additional HTTP headers
+ */
+type TestOptions = {
+  baseUrl: string;
+  extraHeaders: Record<string, string>;
+};
+
+/**
+ * Fixtures provided to each test.
+ * 
+ * @interface TestFixtures
+ * @property {APIRequestContext} apiContext - Playwright API request context (auto cleanup)
+ * @property {ApiClient} apiClient - Custom API client wrapper
+ * @property {realWorldService} rwService - RealWorld API service
+ */
+type TestFixtures = {
+  apiContext: APIRequestContext;
+  apiClient: ApiClient;
+  rwService: realWorldService;
+};
+
+/**
+ * Extended Test with Options and Fixtures
+ * 
+ * @description
+ * Provides:
+ * - TestOptions: Configurable per test/file (baseURL, extraHTTPHeaders)
+ * - TestFixtures: Injected dependencies (apiContext, apiClient, rwService)
+ * 
+ * Usage:
+ *   // Override baseURL and headers per test file
+ *   test.use({
+ *     baseURL: "https://api.github.com",
+ *     extraHTTPHeaders: { "Authorization": "Bearer token123" }
+ *   });
+ * 
+ *   test("example", async ({ rwService }) => {
+ *     await rwService.loginUser(payload);
+ *   });
+ */
+export const test = base.extend<TestOptions & TestFixtures>({
+  /**
+   * Configurable base URL for API requests.
+   * Can be overridden using test.use() in test files.
+   * 
+   * @option baseURL
+   * @default config.api_base_url
+   * 
+   * @description
+   * Override in test file:
+   *   test.use({ baseURL: "https://api.example.com" });
+   */
+  baseUrl: [config.api_base_url, { option: true }],
+
+  /**
+   * Additional HTTP headers to include in all requests.
+   * Can be overridden using test.use() in test files.
+   * 
+   * @option extraHTTPHeaders
+   * @default { "Content-Type": "application/json" }
+   * 
+   * @description
+   * Override in test file:
+   *   test.use({ 
+   *     extraHTTPHeaders: { 
+   *       "Authorization": "Bearer token",
+   *       "X-Custom-Header": "value" 
+   *     } 
+   *   });
+   */
+  extraHeaders: [{ "Content-Type": "application/json" }, { option: true }],
+
+  /**
+   * apiContext Fixture
+   * 
+   * Creates and manages Playwright API request context.
+   * Uses baseURL and extraHTTPHeaders from test options.
+   * Automatically disposed after each test.
+   * 
+   * @fixture apiContext
+   * @scope test
+   * 
+   * @param {string} baseURL - Base URL from test options
+   * @param {Record<string, string>} extraHTTPHeaders - Headers from test options
+   * 
+   * @returns {APIRequestContext} Configured request context
+   */
+  apiContext: async ({ baseURL, extraHeaders }, use) => {
+    const resolvedBaseURL = baseURL ?? config.api_base_url;
+    console.log("-------resolved base url-------:", resolvedBaseURL);
+    BaseTest.logger.info(`Setting up API context for: ${resolvedBaseURL}`);
+    BaseTest.logger.debug(`Headers: ${JSON.stringify(extraHeaders, null, 2)}`);
+
+    const context = await request.newContext({
+      baseURL: resolvedBaseURL,
+      extraHTTPHeaders: extraHeaders
+    });
+
+    await use(context);
+
+    await context.dispose();
+    BaseTest.logger.info("API request context disposed");
+  },
+
+  /**
+   * apiClient Fixture
+   * 
+   * Creates custom ApiClient wrapper around Playwright context.
+   * Depends on apiContext fixture and baseURL option.
+   * 
+   * @fixture apiClient
+   * @scope test
+   * 
+   * @param {APIRequestContext} apiContext - Request context from fixture
+   * @param {string} baseURL - Base URL from test options
+   * 
+   * @returns {ApiClient} API client instance
+   */
+  apiClient: async ({ apiContext, baseURL }, use) => {
+    const resolvedBaseURL = baseURL ?? config.api_base_url;
+    const client = new ApiClient(apiContext, resolvedBaseURL);
+    await use(client);
+  },
+
+  /**
+   * Creates RealWorld API service instance.
+   * Depends on apiClient fixture.
+   * 
+   * @fixture rwService
+   * @scope test
+   * 
+   * @param {ApiClient} apiClient - API client from fixture
+   * 
+   * @returns {realWorldService} RealWorld service instance
+   */
+  rwService: async ({ apiClient }, use) => {
+    const service = new realWorldService(apiClient, config.api_base_path);
+    await use(service);
+  },
+});
+
+export { expect } from "@playwright/test";
+
+/** 
  * @class BaseTest
  * 
  * @description
  * Provides static access to:
- * - API client and request context
- * - Service instances (with dependency injection)
- * - Utilities (logger, validator, generator)
- * - Database client
- * - Allure reporting
+ * - logger: Winston logger for test logging
+ * - validator: Response validation utilities
+ * - generator: Test data generation
+ * - dbClient: Database operations
+ * - config: Environment configuration
+ * - allure: Test reporting
  */
 export class BaseTest {
-    /**
-     * Playwright request context
-     * @static
-     * @type {APIRequestContext}
-     * @description Created in setup(), disposed in teardown()
-     */
-    static requestContext: APIRequestContext;
+  /**
+   * Winston logger instance
+   * @static
+   * @description Logs to console and files. Available as BaseTest.logger
+   */
+  static logger = logger;
 
-    /**
-     * API client instance
-     * @static
-     * @type {ApiClient}
-     * @description Wraps requestContext for simplified API calls
-     */
-    static apiClient: ApiClient;
+  /**
+   * Validator utility class
+   * @static
+   * @description Static utility for response validation. Available as BaseTest.validator
+   */
+  static validator = Validator;
 
-    /**
-     * Winston logger instance
-     * @static
-     * @type {typeof logger}
-     * @description Imported from logger.ts
-     */
-    static logger = logger;
+  /**
+   * Data generator utility
+   * @static
+   * @description Generates test data payloads. Available as BaseTest.generator
+   */
+  static generator = DataGenerator;
 
-    /**
-     * Validator utility class
-     * @static
-     * @type {typeof Validator}
-     * @description Static utility for response validation
-     */
-    static validator = Validator;
+  /**
+   * Environment configuration
+   * @static
+   * @description Configuration loaded from file or Consul. Available as BaseTest.config
+   */
+  static config = config;
 
-    /**
-     * Data generator utility
-     * @static
-     * @type {typeof DataGenerator}
-     * @description Generates test data payloads
-     */
-    static generator = DataGenerator;
+  /**
+   * Database service
+   * @static
+   * @description Database operations. Available as BaseTest.dbClient
+   */
+  static dbClient = DatabaseService;
 
-    /**
-     * Environment configuration
-     * @static
-     * @type {typeof config}
-     * @description Loaded from config file or Consul
-     */
-    static env_config = config;
+  /**
+   * Allure reporting
+   * @static
+   * @description Test reporting. Available as BaseTest.allure
+   */
+  static allure = allure;
 
-    /**
-     * RealWorld API service instance
-     * @static
-     * @type {realWorldService}
-     * @description Initialized in setup() with dependency injection
-     */
-    static rw: realWorldService;
-
-    /**
-     * Database service
-     * @static
-     * @type {typeof DatabaseService}
-     * @description For database operations
-     */
-    static DbC = DatabaseService;
-
-    /**
-     * Allure reporting
-     * @static
-     * @type {typeof allure}
-     * @description For test reporting
-     */
-    static allure = allure;
-
-    /**
-     * Initializes test infrastructure before test suite runs.
-     * Creates request context, API client, and service instances.
-     * Uses dependency injection to initialize services.
-     * 
-     * @method setup
-     * @async
-     * @static
-     * 
-     * @param {string} baseUrl - Base URL for API requests
-     * @param {Record<string, string>} [headers] - Optional default headers
-     * 
-     * @returns {Promise<void>} No return value
-     * 
-     * @description
-     * Workflow:
-     * 1. Creates Playwright request context with baseURL
-     * 2. Initializes ApiClient with context and baseURL
-     * 3. Injects dependencies into service instances (apiClient, logger)
-     * 4. Logs setup completion
-     */
-    static async setup(baseUrl: string, headers?: Record<string, string>): Promise<void> {
-        // Create request context with baseURL
-        this.requestContext = await request.newContext({ 
-            baseURL: baseUrl,
-            extraHTTPHeaders: {
-                "Content-Type": "application/json",
-                ...(headers ?? {})
-            }
-        });
-
-        // Initialize API client
-        this.apiClient = new ApiClient(this.requestContext, baseUrl);
-
-        // Initialize services with dependency injection
-        // Inject: apiClient, service basePath
-        this.rw = new realWorldService(
-            this.apiClient,
-            config.api_base_path
-        );
-
-        this.logger.info("BaseTest setup: requestContext, apiClient, services completed");
-    }
-
-    /**
-     * Cleans up test infrastructure after test suite completes.
-     * Disposes request context and logs completion.
-     * 
-     * @method teardown
-     * @async
-     * @static
-     * 
-     * @returns {Promise<void>} No return value
-     * 
-     * @description
-     * Workflow:
-     * 1. Disposes Playwright request context
-     * 2. Logs teardown completion
-     * 3. Logs test run log file location
-     */
-    static async teardown(): Promise<void> {
-        await this.requestContext?.dispose();
-        this.logger.info("BaseTest teardown: requestContext dispose done");
-        this.logger.info(`Test completed, logs at: ${runLogFile}\n\n`);
-    }
-
-    /**
-     * Logs test title for tracking and debugging.
-     * 
-     * @method logTestTitle
-     * @static
-     * 
-     * @param {string} message - Message prefix
-     * @param {string} testTitle - Test title from test.info().title
-     * 
-     * @returns {void} No return value
-     * 
-     * @description
-     * Formats and logs test title with message prefix.
-     * Uses "Unknown Test" as fallback if title is not provided.
-     */
-    static logTestTitle(message: string, testTitle: string): void {
-        const title = testTitle || "Unknown Test";
-        this.logger.info(`${message} : [${title}]`);
-    }
+  /**
+   * Logs test title for tracking and debugging.
+   * 
+   * @method logTestTitle
+   * @static
+   * 
+   * @param {string} message - Message prefix
+   * @param {string} testTitle - Test title from test.info().title
+   * 
+   * @returns {void} No return value
+   */
+  static logTestTitle(message: string, testTitle: string): void {
+    const title = testTitle || "Unknown Test";
+    this.logger.info(`${message} : [${title}]`);
+  }
 }
