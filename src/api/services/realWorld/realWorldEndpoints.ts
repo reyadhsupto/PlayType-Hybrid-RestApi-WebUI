@@ -1,16 +1,61 @@
 // src/api/services/realWorld/realWorldEndpoints.ts
 
-import {BaseService} from "../baseService.js"
+import { BaseService } from "../baseService.js";
 import { APIResponse } from "@playwright/test";
-import config from "../../../sharedUtils/config.js"
+import { ApiClient } from "../../client.js";
+import { logger } from "../../../sharedUtils/logger.js";
 
+/**
+ * realWorldService Class
+ * 
+ * Service class for RealWorld API endpoints.
+ * Extends BaseService to inherit common API functionality.
+ * 
+ * @class realWorldService
+ * @extends BaseService
+ */
 export class realWorldService extends BaseService {
-  protected basePath = config.api_base_path; // e.g., "/api"
-
-  // ========== USING callApi (uses baseURL from setup) ==========
+  /**
+   * Base path for RealWorld API endpoints
+   * @protected
+   * @type {string}
+   * @description Implements abstract basePath from BaseService. Used for path concatenation.
+   */
+  protected basePath: string;
 
   /**
-   * User registration
+   * Constructor - Initializes realWorldService with dependencies
+   * 
+   * @constructor
+   * @param {ApiClient} apiClient - API client for HTTP requests
+   * @param {typeof logger} loggerInstance - Winston logger instance from logger.ts
+   * @param {string} basePath - Base path for API endpoints (e.g., "/api")
+   * 
+   * @description
+   * Calls parent constructor with injected dependencies.
+   * Sets basePath for this service.
+   */
+  constructor(apiClient: ApiClient, loggerInstance: typeof logger, basePath: string) {
+    super(apiClient, loggerInstance);
+    this.basePath = basePath;
+  }
+
+  /**
+   * registerUser Method
+   * 
+   * Registers a new user account.
+   * 
+   * @method registerUser
+   * @async
+   * @public
+   * 
+   * @param {object} payload - User registration data
+   * 
+   * @returns {Promise<APIResponse>} Response with user data and token
+   * 
+   * @description
+   * POST to /users endpoint.
+   * Uses callApi (baseURL + basePath + "users").
    */
   async registerUser(payload: object): Promise<APIResponse> {
     return this.callApi({
@@ -21,7 +66,21 @@ export class realWorldService extends BaseService {
   }
 
   /**
-   * User login
+   * loginUser Method
+   * 
+   * Authenticates user and returns token.
+   * 
+   * @method loginUser
+   * @async
+   * @public
+   * 
+   * @param {object} payload - User login credentials
+   * 
+   * @returns {Promise<APIResponse>} Response with user data and token
+   * 
+   * @description
+   * POST to /users/login endpoint.
+   * Uses callApi (baseURL + basePath + "users/login").
    */
   async loginUser(payload: object): Promise<APIResponse> {
     return this.callApi({
@@ -32,7 +91,22 @@ export class realWorldService extends BaseService {
   }
 
   /**
-   * Create article
+   * createArticle Method
+   * 
+   * Creates a new article.
+   * 
+   * @method createArticle
+   * @async
+   * @public
+   * 
+   * @param {object} payload - Article data
+   * @param {Record<string, string>} headers - Request headers (auth token)
+   * 
+   * @returns {Promise<APIResponse>} Response with created article data
+   * 
+   * @description
+   * POST to /articles endpoint.
+   * Requires authentication token in headers.
    */
   async createArticle(payload: object, headers: Record<string, string>): Promise<APIResponse> {
     return this.callApi({
@@ -44,7 +118,21 @@ export class realWorldService extends BaseService {
   }
 
   /**
-   * Get articles with filters
+   * getArticles Method
+   * 
+   * Fetches list of articles with optional filters.
+   * 
+   * @method getArticles
+   * @async
+   * @public
+   * 
+   * @param {object} [filters] - Optional query filters
+   * 
+   * @returns {Promise<APIResponse>} Response with articles array
+   * 
+   * @description
+   * GET to /articles endpoint with query parameters.
+   * Uses callApi with query_params.
    */
   async getArticles(filters?: {
     tag?: string;
@@ -60,10 +148,47 @@ export class realWorldService extends BaseService {
     });
   }
 
-  // ========== USING directCall (standalone, full URL required) ==========
+  /**
+   * getExternalUser Method
+   * 
+   * Fetches user data from external JSONPlaceholder API.
+   * 
+   * @method getExternalUser
+   * @async
+   * @public
+   * 
+   * @param {number} userId - User ID to fetch
+   * 
+   * @returns {Promise<APIResponse>} Response with external user data
+   * 
+   * @description
+   * GET to JSONPlaceholder API.
+   * Uses callDirectApi (full URL, no baseURL).
+   */
+  async getExternalUser(userId: number): Promise<APIResponse> {
+    return this.callDirectApi({
+      url: `https://jsonplaceholder.typicode.com/users/${userId}`,
+      method: "GET"
+    });
+  }
 
   /**
-   * Call external webhook (no baseURL needed)
+   * callWebhook Method
+   * 
+   * Calls external webhook with event data.
+   * 
+   * @method callWebhook
+   * @async
+   * @public
+   * 
+   * @param {string} webhookUrl - Full webhook URL
+   * @param {object} payload - Event payload to send
+   * 
+   * @returns {Promise<APIResponse>} Response from webhook
+   * 
+   * @description
+   * POST to external webhook.
+   * Uses callDirectApi (full URL, no baseURL).
    */
   async callWebhook(webhookUrl: string, payload: object): Promise<APIResponse> {
     return this.callDirectApi({
@@ -74,17 +199,22 @@ export class realWorldService extends BaseService {
   }
 
   /**
-   * Get external user data from JSONPlaceholder
-   */
-  async getExternalUser(userId: number): Promise<APIResponse> {
-    return this.callDirectApi({
-      url: `https://jsonplaceholder.typicode.com/users/${userId}`,
-      method: "GET"
-    });
-  }
-
-  /**
-   * Search GitHub repositories (external API)
+   * searchGitHubRepos Method
+   * 
+   * Searches GitHub repositories.
+   * 
+   * @method searchGitHubRepos
+   * @async
+   * @public
+   * 
+   * @param {string} query - Search query
+   * @param {string} [sort] - Sort order (default: "stars")
+   * 
+   * @returns {Promise<APIResponse>} Response with search results
+   * 
+   * @description
+   * GET to GitHub API.
+   * Uses callDirectApi with query parameters.
    */
   async searchGitHubRepos(query: string, sort: string = "stars"): Promise<APIResponse> {
     return this.callDirectApi({
@@ -92,60 +222,6 @@ export class realWorldService extends BaseService {
       method: "GET",
       query_params: { q: query, sort, order: "desc" },
       headers: { "Accept": "application/vnd.github.v3+json" }
-    });
-  }
-
-  /**
-   * Get weather data from external API
-   */
-  async getWeather(city: string, apiKey: string): Promise<APIResponse> {
-    return this.callDirectApi({
-      url: "https://api.openweathermap.org/data/2.5/weather",
-      method: "GET",
-      query_params: { q: city, appid: apiKey }
-    });
-  }
-
-  /**
-   * Post to external analytics service
-   */
-  async trackEvent(analyticsUrl: string, event: object): Promise<APIResponse> {
-    return this.callDirectApi({
-      url: analyticsUrl,
-      method: "POST",
-      payload: event,
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": "your-api-key"
-      }
-    });
-  }
-
-  /**
-   * Get data from a different microservice (different domain)
-   */
-  async getOrdersFromOrderService(orderId: string): Promise<APIResponse> {
-    return this.callDirectApi({
-      url: `https://orders-service.example.com/api/v1/orders/${orderId}`,
-      method: "GET",
-      headers: {
-        "Authorization": "Bearer service-token"
-      }
-    });
-  }
-
-  /**
-   * Call third-party payment gateway
-   */
-  async processPayment(paymentGatewayUrl: string, paymentData: object, apiKey: string): Promise<APIResponse> {
-    return this.callDirectApi({
-      url: paymentGatewayUrl,
-      method: "POST",
-      payload: paymentData,
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      }
     });
   }
 }

@@ -1,4 +1,4 @@
-// src/utils/logger.ts
+// src/sharedUtils/logger.ts
 
 /**
  * Logger file to write logs inside master.log and test-run-**.log files
