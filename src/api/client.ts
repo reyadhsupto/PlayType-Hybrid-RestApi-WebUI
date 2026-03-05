@@ -224,7 +224,7 @@ export class ApiClient {
       logger.debug(`Query Params: ${JSON.stringify(query_params, null, 2)}`);
     }
     if (payload && ["POST", "PUT", "PATCH"].includes(method.toUpperCase())) {
-      logger.debug(` Request Payload: ${JSON.stringify(payload, null, 2)}`);
+      logger.debug(`Request Payload: ${JSON.stringify(payload, null, 2)}`);
     }
 
     try {
