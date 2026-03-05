@@ -7,8 +7,6 @@ import { logger } from "../../sharedUtils/logger.js";
 import { z } from "zod";
 
 /**
- * BaseService Abstract Class
- * 
  * Base class for all API service endpoints.
  * Provides common functionality for API calls and response validation.
  * Uses dependency injection to avoid coupling with test infrastructure.
@@ -43,27 +41,23 @@ export abstract class BaseService {
    * @type {typeof logger}
    * @description Winston logger from logger.ts. Used for debug, info, warn, and error logging.
    */
-  protected logger: typeof logger;
+  protected logger = logger;
 
   /**
    * Constructor - Initializes BaseService with dependencies
    * 
    * @constructor
    * @param {ApiClient} apiClient - API client for HTTP requests
-   * @param {typeof logger} loggerInstance - Winston logger instance from logger.ts
    * 
    * @description
    * Uses dependency injection to avoid coupling with test infrastructure.
    * Validator is used as static utility class (not injected).
    */
-  constructor(apiClient: ApiClient, loggerInstance: typeof logger) {
+  constructor(apiClient: ApiClient) {
     this.apiClient = apiClient;
-    this.logger = loggerInstance;
   }
 
   /**
-   * assertDbQueryResult Method
-   * 
    * Validates database query results against schema or field value.
    * Returns early if no results (DB disabled or empty result set).
    * 
@@ -104,8 +98,6 @@ export abstract class BaseService {
   }
 
   /**
-   * callApi Method
-   * 
    * Wrapper around apiClient.callApi for structured API calls.
    * Uses injected requestContext with baseURL.
    * Concatenates basePath with path_param for full endpoint path.
@@ -143,8 +135,6 @@ export abstract class BaseService {
   }
 
   /**
-   * callDirectApi Method
-   * 
    * Wrapper around apiClient.callDirectApi for one-off API calls.
    * Does NOT use baseURL - requires full URL.
    * Uses same requestContext as callApi (shares cookies, auth state).
@@ -172,9 +162,7 @@ export abstract class BaseService {
   }
 
   /**
-   * assertStatus Method
-   * 
-   * Asserts that HTTP response status matches expected value.
+   * Asserts & Logs that HTTP response status matches expected value.
    * 
    * @method assertStatus
    * @async
@@ -202,8 +190,6 @@ export abstract class BaseService {
   }
 
   /**
-   * validateSchema Method
-   * 
    * Validates JSON response body against JSON Schema using AJV.
    * 
    * @method validateSchema
@@ -230,8 +216,6 @@ export abstract class BaseService {
   }
 
   /**
-   * validateZodSchema Method
-   * 
    * Validates JSON response body against Zod schema.
    * 
    * @method validateZodSchema
@@ -258,8 +242,6 @@ export abstract class BaseService {
   }
 
   /**
-   * validateField Method
-   * 
    * Validates specific field value in API response.
    * Handles both JSON and plain text responses.
    * 

@@ -20,11 +20,7 @@ if(config.useConsul){
 }
 
 /**
- * BaseTest Class
- * 
- * Central test infrastructure class.
- * Manages test setup, teardown, and provides access to services and utilities.
- * Implements dependency injection for clean architecture.
+ * Manages api test setup, teardown, and provides access to services and utilities.
  * 
  * @class BaseTest
  * 
@@ -110,8 +106,6 @@ export class BaseTest {
     static allure = allure;
 
     /**
-     * setup Method
-     * 
      * Initializes test infrastructure before test suite runs.
      * Creates request context, API client, and service instances.
      * Uses dependency injection to initialize services.
@@ -146,10 +140,9 @@ export class BaseTest {
         this.apiClient = new ApiClient(this.requestContext, baseUrl);
 
         // Initialize services with dependency injection
-        // Inject: apiClient, logger, basePath
+        // Inject: apiClient, service basePath
         this.rw = new realWorldService(
             this.apiClient,
-            this.logger,
             config.api_base_path
         );
 
@@ -157,8 +150,6 @@ export class BaseTest {
     }
 
     /**
-     * teardown Method
-     * 
      * Cleans up test infrastructure after test suite completes.
      * Disposes request context and logs completion.
      * 
@@ -181,8 +172,6 @@ export class BaseTest {
     }
 
     /**
-     * logTestTitle Method
-     * 
      * Logs test title for tracking and debugging.
      * 
      * @method logTestTitle
