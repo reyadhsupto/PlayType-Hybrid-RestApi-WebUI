@@ -1,4 +1,6 @@
-// src/utils/dbClient.ts
+// src/sharedUtils/dbClient.ts
+
+
 import fs from "fs";
 import { Client } from 'pg';
 import mysql from 'mysql2/promise';

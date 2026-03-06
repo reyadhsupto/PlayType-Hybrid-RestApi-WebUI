@@ -32,14 +32,14 @@ node:
 # Install dependencies from package.json
 .PHONY: deps
 deps:
-	@echo "⚡ Installing dependencies from package.json..."
+	@echo " Installing dependencies from package.json..."
 	npm install
 
 # Install Playwright (API mode - no browsers unless needed)
 .PHONY: playwright
 playwright:
-	@echo "⚡ Installing Playwright browsers (Chromium only)..."
-	npx playwright install chromium --with-deps
+	@echo " Installing Playwright browsers (with dependencies)..."
+	npx playwright install --with-deps
 
 # Aggregate setup
 .PHONY: setup

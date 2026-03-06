@@ -1,4 +1,4 @@
-// src/utils/reportGeneratorAllure.ts
+// src/sharedUtils/reportGeneratorAllure.ts
 
 import fs from 'fs';
 import path from 'path';

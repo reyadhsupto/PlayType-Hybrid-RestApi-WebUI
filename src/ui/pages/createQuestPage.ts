@@ -10,7 +10,7 @@ export class CreateQuestPage extends BasePage {
   }
 
   async clickCreateButton() {
-    await this.clickElement('.fa.fa-plus');
+    await this.click('.fa.fa-plus');
     // await this.waitForSeconds(15);
     await this.pause();
   }

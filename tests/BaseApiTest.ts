@@ -98,8 +98,6 @@ export const test = base.extend<TestOptions & TestFixtures>({
   extraHeaders: [{ "Content-Type": "application/json" }, { option: true }],
 
   /**
-   * apiContext Fixture
-   * 
    * Creates and manages Playwright API request context.
    * Uses baseURL and extraHTTPHeaders from test options.
    * Automatically disposed after each test.
@@ -114,7 +112,6 @@ export const test = base.extend<TestOptions & TestFixtures>({
    */
   apiContext: async ({ baseURL, extraHeaders }, use) => {
     const resolvedBaseURL = baseURL ?? config.api_base_url;
-    console.log("-------resolved base url-------:", resolvedBaseURL);
     BaseTest.logger.info(`Setting up API context for: ${resolvedBaseURL}`);
     BaseTest.logger.debug(`Headers: ${JSON.stringify(extraHeaders, null, 2)}`);
 
@@ -130,8 +127,6 @@ export const test = base.extend<TestOptions & TestFixtures>({
   },
 
   /**
-   * apiClient Fixture
-   * 
    * Creates custom ApiClient wrapper around Playwright context.
    * Depends on apiContext fixture and baseURL option.
    * 

@@ -1,3 +1,5 @@
+// src/sharedUtils/dataGenerator.ts
+
 /** 
  * Class containing static methods returning fake data
  * Uses faker.js to generate random data

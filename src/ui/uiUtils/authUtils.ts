@@ -1,5 +1,8 @@
+// src/ui/uiUtils/authUtils.ts
+
 import { BrowserContext } from '@playwright/test';
 import config from '../../sharedUtils/config.js';
+import { string } from 'zod';
 
 /**
  * Sets up authentication in localStorage and cookies for a given context.
@@ -8,10 +11,12 @@ import config from '../../sharedUtils/config.js';
  */
 export async function setupAuth(context: BrowserContext, url: string) {
 	// Build the storage object as your app expects
-	const storageKey = config.auth.key;
-	const storageValue = config.auth.state;
-	const localStorageObj: Record<string, any> = {};
-	localStorageObj[storageKey] = storageValue;
+		const storageKey = config.auth.key;
+		const storageValue = config.auth.state;
+		const localStorageObj: Record<string, any> = {};
+		if (typeof storageKey === 'string') {
+			localStorageObj[storageKey] = storageValue;
+		}
 
 	// Set localStorage before any page loads
 	await context.addInitScript((data) => {
