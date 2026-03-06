@@ -4,8 +4,6 @@ import { APIRequestContext, APIResponse } from "@playwright/test";
 import { logger } from "../sharedUtils/logger.js";
 
 /**
- * ApiRequestOptions Interface
- * 
  * Defines the structure for API requests using the callApi method.
  * Used for structured API calls with baseURL concatenation.
  * 
@@ -26,8 +24,6 @@ export interface ApiRequestOptions {
 }
 
 /**
- * DirectCallOptions Type
- * 
  * Defines the structure for direct API calls without baseURL.
  * Extends ApiRequestOptions using Omit to replace 'path_param' with 'url'.
  * 
@@ -44,8 +40,6 @@ export type DirectCallOptions = Omit<ApiRequestOptions, 'path_param'> & {
 };
 
 /**
- * ApiClient Class
- * 
  * Wrapper around Playwright's APIRequestContext for simplified API testing.
  * Provides two modes:
  * 1. callApi() - Structured approach using baseURL for internal APIs
@@ -75,7 +69,7 @@ export class ApiClient {
   private baseUrl: string;
 
   /**
-   * Constructor - Initializes ApiClient
+   * @constructor - Initializes ApiClient
    * 
    * @param {APIRequestContext} requestContext - Playwright request context
    * @param {string} baseUrl - Base URL for API
@@ -86,8 +80,6 @@ export class ApiClient {
   }
 
   /**
-   * callApi Method
-   * 
    * Executes HTTP API calls using requestContext with baseURL concatenation.
    * Structured approach for internal/main API endpoints.
    * 
@@ -176,8 +168,6 @@ export class ApiClient {
   }
 
   /**
-   * callDirectApi Method
-   * 
    * Executes HTTP calls using full URLs without baseURL concatenation.
    * Flexible approach for external APIs and one-off calls.
    * Uses same requestContext but ignores baseURL.
@@ -280,8 +270,6 @@ export class ApiClient {
   }
 
   /**
-   * logResponse - Private Helper Method
-   * 
    * Logs API response details for debugging.
    * Attempts JSON parsing first, falls back to text, then gives up gracefully.
    * 

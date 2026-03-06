@@ -1,143 +1,103 @@
-# Hybrid(RestApi + WebUi) Automation Framework Using Playwright & Typescript
-Core Rest Api Automation framework leveraging Playwright, Typescript, Allure, Zod, Makefile, Prometheus, Grafana, Docker etc.
-It follows an OOP structure with a **BaseTest** class for both api and ui, **Service/Page classes** (like POM/SOM for APIs and UIs), **validators**, and **data generators** for dynamic payloads, **Fixtures** for dynamicity.
+# PlayType - Hybrid Test Automation Framework
+
+A production-ready hybrid test automation framework built with **Playwright** and **TypeScript**, supporting both **REST API** and **Web UI** testing with advanced features like database validation, Prometheus monitoring, and Allure reporting.
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
+[![Playwright](https://img.shields.io/badge/Playwright-Latest-green.svg)](https://playwright.dev/)
+[![Node](https://img.shields.io/badge/Node.js-22+-green.svg)](https://nodejs.org/)
 
 ---
 
-## Folder Structure
-```
-playwright-api-framework/
-│── playwright.config.ts            # Playwright config (base URL, reporters, retries)
-│── tsconfig.json                   # TypeScript config
-│── package.json                    # Dependencies & scripts
-|-- package_lock.json.          
-|-- Makefile                        #Build automation
-│── .env.stage                      # Environment variables (baseURL, auth tokens etc.)
-│── /playwright-report
-│    └── results.json               #test run result
-│── /metrics
-│    ├── generateMetrics.ts         #Prometheus metrics generator(.prom)
-│    ├── playwright-metics.prom     #Prometheus metrics file
-│    └── server.ts                  #exposes metrics server
+## Table of Contents
 
-│── /src
-│    ├── /api
-│    │    ├── client.ts                 # Generic API client (Playwright api context call wrapper)
-│    │    ├── validator.ts              # Schema validator (AJV  & Jod wrapper)
-│    │
-|    |-- /fixtures
-|    |    |--global-setup.ts
-|    |    |--global-teardown.ts
-│    ├── /services
-│    │    ├── baseService.ts            # baseService adapter for api call, assertions, validations
-│    │    └── service-x  
-│    │         |--endpoints.ts          # Utility for defining service endpoints
-│    │
-│    ├── /utils
-│    │    ├── logger.ts                 # Logger (winston)
-│    │    ├── dataGenerator.ts          # payloads, Random test data (faker.js)
-│    │    ├── config.ts                 # env and consul based config currently
-│    │    ├──consulConfig.ts            # Consul configuration
-│    │    ├── dbClient.ts               # DataBase(Postgres) client config with ssh
-│    │    ├── payloadGenerator.ts       # Generates api payloads
-│    │    ├── rerportGeneratorAllure.ts       # Generates allure report(copies historical data)
-│    │    └── config.ts                 # env based config currently
-│
-│── /tests
-│    ├── /testServices                  #testcases for services from src/services
-│    │    ├── xEndpoints.spec.ts        # Tests for x services
-│    │
-│    ├── BaseTest.ts                    #BaseTest setup
-│    │-- schemas.ts                     # JSON Schemas for assertion/validation response
-│
-│── /report                             # Playwright/Allure reports (auto-generated)
-│── prometheus.yml                      # Prometheus yml config
-│── docker-compose.yml                  # services: grafana, prometheus, metrics server
-│── Dockerfile.metrics                  # metrics docker config
+- [Features](#features)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Quick Start](#quick-start)
+- [Documentation](#documentation)
+- [Test Execution](#test-execution)
+- [Reporting & Monitoring](#reporting--monitoring)
+- [Configuration](#configuration)
+- [Tech Stack](#tech-stack)
 
-```
 ---
 
-## Framework Flow Diagram
+## Features
 
+### API Testing
+- **Dual API client modes** - Structured (with baseURL) + Direct (full URL) calls
+- **Response validation** - JSON Schema (AJV) + Zod with TypeScript integration
+- **Database verification** - PostgreSQL & MySQL with SSH tunnel support
+- **Dynamic data generation** - Faker.js integration for realistic test data
+- **Request/response logging** - Winston logger with file rotation
+- **Fixture-based architecture** - Clean dependency injection
+
+### UI Testing
+- **Page Object Model (POM)** - Maintainable, scalable test structure
+- **Fixture-based setup** - Automatic browser lifecycle management
+- **Auth state management** - Pre-configured authentication for faster tests
+- **Network interception** - Mock APIs, modify responses, track requests
+- **Screenshot capture** - Automatic failure screenshots
+
+### Framework Features
+- **TypeScript** - Full type safety and IntelliSense support
+- **Playwright fixtures** - Test isolation and parallel execution
+- **Winston logging** - Separate logs per test run + master log
+- **Allure reports** - HTML reports with historical trends
+- **Prometheus + Grafana** - Test metrics visualization and monitoring
+- **Consul integration** - Centralized configuration management (optional)
+- **Multi-environment** - Stage, production via .env files
+- **Makefile automation** - Simple commands for all operations
+- **Docker support** - Containerized monitoring stack
+
+---
+## Architecture
+
+### High-Level Flow
 ```
-+─────────────────────────────+
-|         Test Cases          |
-|   (/tests/*.spec.ts)        |
-| - Imports BaseTest          |
-| - Executes tests            |
-| - Final assertions          |
-+──────────────┬──────────────+
-               |
-               v
-+─────────────────────────────+
-|          BaseTest           |
-| (/src/tests/baseTest.ts)    |
-| - Runs setup fixtures       |
-| - Calls PayloadGenerator    |
-| - Builds payload            |
-| - Instantiates services     |
-| - Runs teardown fixtures    |
-+──────────────┬──────────────+
-               |
-               v
-+─────────────────────────────+
-|     PayloadGenerator        |
-| (/src/utils/payloadGen)     |
-| - Creates static payload    |
-| - If dynamic: calls         |
-|   DataGenerator             |
-+──────────────┬──────────────+
-               |
-               v
-+─────────────────────────────+
-|       DataGenerator         |
-| (/src/utils/dataGen)        |
-| - Generates dynamic fields  |
-|   (UUID, timestamps, etc.)  |
-| - Returns merged data       |
-+──────────────┬──────────────+
-               |
-               v
-+─────────────────────────────+
-|      Specific Service       |
-| (/src/services/xService.ts) |
-| - Builds API params         |
-| - Calls BaseService methods |
-+──────────────┬──────────────+
-               |
-               v
-+─────────────────────────────+
-|         BaseService         |
-| (/src/services/baseService) |
-| - callApi() via ApiClient   |
-| - Validate with Zod/AJV     |
-| - Validate status codes     |
-| - Optional DB validation    |
-+───────────┬───────────────┬─+
-            |               |
-            v               v
-+─────────────────────+      +─────────────────────────+
-|      ApiClient       |     |        DBClient         |
-| (/src/api/client)    |     | (/src/utils/db.ts)      |
-| - Builds request     |     | - Creates SSH tunnel    |
-| - Adds headers       |     | - Connects to DB        |
-| - Sends HTTP request |     | - Executes SQL query    |
-| - Logs req/res       |     | - Returns DB result     |
-+────────────┬────────+      +─────────┬───────────────+
-             |                         |
-             v                         |
-+─────────────────────────────+        |
-| HTTP Request/Response      |         |
-| (Playwright requestContext)|         |
-+────────────┬───────────────+         |
-             |                         |
-             v                         |
-+─────────────────────────────+ <───────+
-|       Target API Server     |
-+─────────────────────────────+
-
-
+┌─────────────────────────────────────────────────────────────────┐
+│                         Test Cases                              │
+│                    (/tests/*.spec.ts)                           │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                    Playwright Fixtures                          │
+│        (apiContext, apiClient, rwService, poManager)            │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                ┌────────────┴────────────┐
+                │                         │
+                ↓                         ↓
+┌───────────────────────────┐   ┌──────────────────────┐
+│      BaseTest (API)       │   │    BasePage (UI)     │
+│  Static Utilities:        │   │  Common Actions:     │
+│  • logger                 │   │  • click, fill       │
+│  • validator              │   │  • waitFor, hover    │
+│  • generator              │   │  • screenshot        │
+│  • dbClient               │   │  • network helpers   │
+└────────────┬──────────────┘   └──────────┬───────────┘
+             │                             │
+             ↓                             ↓
+┌───────────────────────────┐   ┌──────────────────────┐
+│   Service Layer (API)     │   │  Page Objects (UI)   │
+│   • realWorldService      │   │  • CreateQuestPage   │
+│   • baseService           │   │  • UpdateQuestPage   │
+└────────────┬──────────────┘   └──────────────────────┘
+             │
+             ↓
+┌───────────────────────────┐
+│      API Client           │
+│  • callApi() - baseURL    │
+│  • callDirectApi() - full │
+└────────────┬──────────────┘
+             │
+             ↓
+┌───────────────────────────┐
+│  Playwright API Context   │
+│  • HTTP Request/Response  │
+│  • Cookie/Auth State      │
+└───────────────────────────┘
 ```
 ### Additional Components:
 
@@ -200,497 +160,538 @@ playwright-api-framework/
 
 ```
 
-
-- **Test Cases**: Playwright spec files in `/tests` use service classes for API interactions.
-- **Service Classes**: Encapsulate endpoint methods, validation logic, and interact with BaseService.
-- **BaseService**: Provides shared API call logic, assertions, and schema validation.
-- **ApiClient**: Handles low-level HTTP requests and responses.
-- **Endpoints Utility**: Manages environment-based endpoint switching.
-- **Schema Validation**: Validates API responses using AJV, Zod.
-- **Data Generation**: Generates dynamic payloads using Faker.js.
-- **Config & Environment**: Loads environment variables and configuration.
-- **Logging**: Captures logs per test run.
-
 ---
 
-##  Tech Stack
-
-- **Language:** TypeScript
-- **Test Runner:** Playwright Test
-- **Assertions:** Playwright `expect`
-- **Data Generator:** Faker.js
-- **Schema Validation:** AJV, Zod
-- **Logging:** Winston (Custom: Master and logs per test run)
-- **CI/CD:** GitHub Actions (can be configured to run tests on push/PR)
-- **Dependency Management:** NPM
-- **Build:** TypeScript compiler
-- **Reporting and Monitoring:** Playwright Reporter, Allure, Prometheus, Grafana
-- **ENV Management:** Dotenv, Consul
-- **Build Automation:** Makefile
-- **Containerization:** Docker, Docker-Compose
----
-
-##  Pre-requisites
-
-- **Node js:** 22
----
-
-##  Setup
-
-1. **Clone the repo**
-
-```bash
-git clone <repo-url>
-cd quest-api-automation
+## Project Structure
 ```
-2. **Install Node.js (v22 recommended) -> if not pre-installed**
-
-```bash
-make node
-```
-3. **Install dependencies**
-
-```bash
-make deps
-```
-4. **Install Playwright browsers**
-
-```bash
-make playwright
-```
-5. **Compile TypeScript (optional check)**
-
-```bash
-make build
-```
-### .env configuration
-
-create a .env.stage file in root directory
-with:
-```env
-api_base_url = <url>
-dashboard_url = <url>
-domain = <domain>
-
-# mysql configurations
-MYS_DB_HOST=<db_host>
-MYS_DB_PORT=<port>
-MYS_DB_NAME=<db_name>
-
-# postgres configurations
-PG_DB_HOST=<pg_host>
-PG_DB_PORT=<pg_port>
-PG_DB_NAME=<pg_name>
-
-# SSH settings
-USE_SSH=<true/false>
-SSH_HOST=<host>
-SSH_PORT=<port>
-SSH_USER=<user>
-SSH_KEY_PATH=<your_path>
-```
----
-
-##  Running Tests
-1. **Run all tests (default environment: stage)**
-
-```bash
-make test
-```
-2. **Run a specific test file**
-
-```bash
-make test-file FILE=tests/testServices/createQuest.spec.ts
-```
-3. **Run a specific test file with env**
-
-```bash
-make test-file FILE=tests/testServices/createQuest.spec.ts ENV=prod
-```
-4. **Run tests with environment** default is stage if not specified
-
-```bash
-make test-env ENV=stage
-```
-5. **Run tests with tags, run group tests** TAG=grp
-
-```bash
-make test-tag TAG="quest"
-make test-tag TAG="quest and stop and start"
-make test-tag TAG="quest or stop or start"
-```
-6. **Run tests/set of tests multiple times(Lead Generation)** RCOUNT=n (default n=1)
-
-```bash
-make test-tag TAG="quest" RCOUNT=n
-make test-tag TAG="quest and stop and start" RCOUNT=n
-make test-tag TAG="quest or stop or start" RCOUNT=n
-```
-7. **View HTML report**
-
-```bash
-make report
-```
-##  Adding Tests
-1. **Create a Service Class**
-```bash
-Add a new service under src/services/<serviceName>Service.ts.
-
-Define endpoint methods like getSomething(), createSomething().
-
-Add validation methods (assertStatus, validateSchema, etc.).
-```
-2. **Write the Test Case**
-```bash
-Create a new test file inside tests/testServices/.
-
-Import your service and use it within a Playwright test() block.
-```
-3. **Write the Request payload**
-```bash
-Use generator.ts for dynamic payloads with Faker.
-```
-4. **Add Test title, description, tag(group test)**
-```bash
-test('data-driven test', { tag: 'regression' }, async ({ page }) => {
-  // ... test code
-});
-
-test('data-driven test', { tag: ['regression', 'api'] }, async ({ page }) => {
-  // ... test code
-});
-
-test('basic test with annotation', {
-  annotation: {
-    type: 'issue',
-    description: 'https://github.com/microsoft/playwright/issues/12345',
-  },
-}, async ({ page }) => {
-  await page.goto('https://playwright.dev/');
-  await expect(page).toHaveTitle(/Playwright/);
-});
-Annotations are displayed in the test report and can be accessed by custom reporters via the TestCase.annotations property.
-```
-
-5. **Parameterize tests**
-```bash
-[
-  { name: 'Alice', expected: 'Hello, Alice!' },
-  { name: 'Bob', expected: 'Hello, Bob!' },
-  { name: 'Charlie', expected: 'Hello, Charlie!' },
-].forEach(({ name, expected }) => {
-  // You can also do it with test.describe() or with multiple tests as long the test name is unique.
-  test(`testing with ${name}`, async ({ page }) => {
-    await page.goto(`https://example.com/greet?name=${name}`);
-    await expect(page.getByRole('heading')).toHaveText(expected);
-  });
-});
-```
-6. **Validate Responses**
-```bash
-Validate HTTP status, schema, and values using methods from the service.
-```
-##  Notes
-- All API calls go through ApiClient.
-
-- Schema validation is done via Validator.
-
-- Dynamic payloads can be generated using Generator.
-
-- Logs are stored in logs/ folder per test run.
-
-- Use .env to manage base URLs, tokens, or credentials for stage/prod.
-
----
-## Schema Validation
-Our framework supports API response validation using two approaches:
-
-1. **AJV (JSON Schema)**
-
-**Purpose:** Validate API responses against a JSON schema (Draft-7 compatible).
-
-**Example JSON schema:**
-```ts
-// tests/schemas.ts
-
-export const createQuestSchema = {
-  type: "object",
-  properties: {
-    message: { type: "string" },
-    data: {
-      type: "object",
-      properties: { id: { type: "string" } },
-      required: ["id"]
-    }
-  },
-  required: ["message", "data"]
-};
-```
-
-**Usage in tests:**
-```ts
-import { BaseTest } from "../BaseTest.js";
-import { createQuestSchema } from "../schemas/schemas.js";
-
-test("Validate Create Quest response using AJV", async () => {
-  const response = await BaseTest.apiClient.callApi({
-    path_param: "/v2/quests",
-    method: "POST",
-    payload: { ... }
-  });
-
-  const body = await response.json();
-  const isValid = BaseTest.validator.validateSchema(createQuestSchema, body);
-  expect(isValid).toBe(true);
-});
-
-```
-> Logs detailed validation errors if schema mismatches.
-
-2. **Zod (runtime schema + type validation)**
-
-**Purpose:** Strong runtime type validation for API responses, supports objects and arrays.
-
-**Example Zod schema:**
-```ts
-// tests/schemas.ts
-import { z } from "zod";
-
-export const createQuestSchemaZod = z.object({
-  message: z.string(),
-  data: z.object({
-    id: z.string(),
-  }),
-});
-```
-
-**Usage in tests:**
-
-```ts
-import { BaseTest } from "../BaseTest.js";
-import { createQuestSchemaZod } from "../schemas/schemas.js";
-
-test("Validate Create Quest response using Zod", async () => {
-  const response = await BaseTest.apiClient.callApi({
-    path_param: "/v2/quests",
-    method: "POST",
-    payload: { ... }
-  });
-
-  await BaseTest.validateSchema(response, createQuestSchemaZod);
-});
-
-```
-
-You can choose either depending on your preference.
-
----
-## Response field value Validation
-
-If you want to validate a specific field from response:
-```ts
-await BaseTest.validateField(response, "data.id", "expected-id-value");
-```
-If you want to validate a specific field from response:
-```ts
-await BaseTest.validateField(response, "data.items[0].id", "12345");
+playtype-hybrid-framework/
+├── 📂 src/
+│   ├── 📂 api/
+│   │   ├── client.ts                      # API client (callApi, callDirectApi)
+│   │   ├── validator.ts                   # AJV & Zod validators
+│   │   ├── 📂 apiUtils/
+│   │   │   └── payloadGenerator.ts        # Test data generators
+│   │   └── 📂 services/
+│   │       ├── baseService.ts             # Base service with validations
+│   │       └── 📂 realWorld/
+│   │           └── realWorldEndpoints.ts  # Service endpoint methods
+│   ├── 📂 ui/
+│   │   ├── 📂 pages/
+│   │   │   ├── basePage.ts               # Base page actions
+│   │   │   ├── createQuestPage.ts        # Example page object
+│   │   │   └── updateQuestPage.ts
+│   │   ├── 📂 actions/
+│   │   │   └── helperActions.ts          # Network interception, uploads
+│   │   ├── 📂 uiUtils/
+│   │   │   └── authUtils.ts              # Auth state setup
+│   │   └── poManager.ts                  # Page Object Manager
+│   └── 📂 sharedUtils/
+│       ├── config.ts                      # Central configuration
+│       ├── consulConfig.ts                # Consul integration
+│       ├── dataGenerator.ts               # Faker.js wrapper
+│       ├── dbClient.ts                    # PostgreSQL/MySQL client
+│       ├── logger.ts                      # Winston logger
+│       └── reportGeneratorAllure.ts       # Allure report with trends
+├── 📂 tests/
+│   ├── 📂 api/
+│   │   ├── 📂 testRealWorldApi/
+│   │   │   └── user.spec.ts              # API test examples
+│   │   └── schemas.ts                    # Zod/JSON schemas
+│   ├── 📂 ui/
+│   │   └── createQuestPage.spec.ts       # UI test examples
+│   ├── BaseApiTest.ts                    # API fixtures & BaseTest
+│   └── baseUiTest.ts                     # UI fixtures
+├── 📂 metrics/
+│   ├── generate-metrics.ts               # Prometheus metrics generator
+│   ├── playwright-metrics.prom           # Generated metrics file
+│   └── server.ts                         # Metrics HTTP server
+├── 📂 docs/                              # Documentation
+│   ├── API_TESTING.md
+│   ├── UI_TESTING.md
+│   ├── FIXTURES.md
+│   ├── DATABASE.md
+│   └── EXAMPLES.md
+├── 📄 .env.stage                         # Stage environment config
+├── 📄 .env.prod                          # Production environment config
+├── 📄 playwright.config.ts               # Playwright configuration
+├── 📄 docker-compose.yml                 # Prometheus + Grafana
+├── 📄 Makefile                           # Build automation
+├── 📄 package.json                       # Dependencies
+└── 📄 README.md                          # This file
 ```
 
 ---
-## Allure Reporting
-
-This framework supports Allure reporting for advanced test result visualization.
+## Quick Start
 
 ### Prerequisites
-- Java (required for Allure Commandline)
-- Allure dependencies (already included in devDependencies)
 
-### Usage
+- **Node.js** >= 20
+- **npm** or **yarn**
+- **Make** (pre-installed on macOS/Linux, install via Chocolatey on Windows)
 
-1. **Generate Allure Report**
-   After running your tests, generate the Allure report:
-   ```bash
-   make allure-generate
-   ```
-   This will process results from the `allure-results` folder and create a report in `allure-report`.
-
-2. **Open Allure Report**
-   To view the report in your browser:
-   ```bash
-   make allure-open
-   ```
-
-3. **Generate and Open Allure Report (Combined)**
-   To generate and immediately open the report:
-   ```bash
-   make allure-report
-   ```
-
-### Troubleshooting
-- If you see an error about missing Java, install it (e.g., via Homebrew: `brew install openjdk`).
-- Ensure your tests are configured to use the Allure reporter in `playwright.config.ts`:
-  ```js
-  reporters: [ ['allure-playwright'] ]
-  ```
----
-
-## Playwright Test Monitoring (Prometheus + Grafana + Docker)
-This section explains how to generate Playwright test metrics and visualize them on Grafana dashboards.
-
-**Pre-requisites**
-- Docker Desktop
-
-### How It Works
-
-- Playwright runs tests and generates a JSON test report.
-
-- A metrics generator script(metrics/generate-metics.ts) converts the JSON into Prometheus metrics (metrics/playwright-metrics.prom).
-
-- A metrics server exposes those metrics on HTTP (/metrics).
-
-- Prometheus scrapes the metrics server.
-
-- Grafana visualizes results.
-
-### Procedure
-
-1. **Run Playwright Tests (Json report enabled)**
+### Installation
 ```bash
+# 1. Clone repository
+git clone 
+cd playtype-hybrid-framework
+
+# 2. Install Node.js (if not installed)
+make node
+
+# 3. Install all dependencies + Playwright browsers
+make setup
+
+# 4. Verify setup
+make build
+```
+
+### First Test Run
+```bash
+# Run all tests
 make test
-```
-This generates:
-```
-playwright-report/results.json
+
+# Run specific test file
+make test-file FILE=tests/api/testRealWorldApi/user.spec.ts
+
+# Run tests with tag
+make test-tag TAG="smoke"
+
+# View HTML report
+make report
 ```
 
-2. **Generate Prometheus metrics from Playwright results**
+---
+## Documentation
+
+Comprehensive guides available in `/docs`:
+
+| Document | Description |
+|----------|-------------|
+| **[API Testing Guide](./docs/API_TESTING.md)** | API client usage, fixtures, validation strategies |
+| **[UI Testing Guide](./docs/UI_TESTING.md)** | Page objects, auth setup, UI fixtures |
+| **[Fixtures Guide](./docs/FIXTURES.md)** | Fixture usage, `test.use()` overrides, examples |
+| **[Database Testing](./docs/DATABASE.md)** | DB queries, SSH tunneling, validation |
+| **[Configuration Guide](./docs/CONFIGURATION.md)** | Environment setup, Consul, multi-env |
+| **[Utilities Reference](./docs/UTILITIES.md)** | Logger, data generator, validators |
+| **[Examples](./docs/EXAMPLES.md)** | Common testing patterns and recipes |
+| **[Makefile Commands](./docs/MAKEFILE.md)** | Complete Makefile reference |
+
+---
+## Test Execution
+
+### Using Makefile (Recommended)
 ```bash
+# Run all tests (default: stage environment)
+make test
+
+# Run with specific environment
+make test-env ENV=prod
+
+# Run specific test file
+make test-file FILE=tests/api/testRealWorldApi/user.spec.ts
+
+# Run with custom environment for specific file
+make test-file FILE=tests/ui/createQuestPage.spec.ts ENV=prod
+
+# Run tests with tag
+make test-tag TAG="regression"
+make test-tag TAG="smoke and api"
+make test-tag TAG="TC_001 or TC_002"
+
+# Run tests multiple times (lead generation)
+make test RCOUNT=5
+make test-tag TAG="smoke" RCOUNT=10
+```
+
+### Using npm
+```bash
+# Run all tests
+npm test
+
+# Run specific test
+npx playwright test tests/api/user.spec.ts
+
+# Run with grep pattern
+npx playwright test --grep @smoke
+
+# Run in headed mode
+npx playwright test --headed
+
+# Run with specific browser
+npx playwright test --project=chromium
+```
+
+### Test Filtering
+```bash
+# By tag
+make test-tag TAG="api"              # Single tag
+make test-tag TAG="api and smoke"    # AND logic
+make test-tag TAG="api or ui"        # OR logic
+
+# By test ID
+make test-tag TAG="TC_001"
+make test-tag TAG="TC_001 or TC_002 or TC_003"
+
+# By describe block
+npx playwright test --grep "User Registration"
+
+# Exclude tests
+npx playwright test --grep-invert @skip
+```
+
+### Parallel Execution
+```bash
+# Run with 4 workers
+npx playwright test --workers=4
+
+# Fully parallel mode
+npx playwright test --fully-parallel
+
+# Serial mode (one by one)
+npx playwright test --workers=1
+```
+
+---
+## Reporting & Monitoring
+
+### Playwright HTML Reports
+```bash
+# View latest report
+make report
+
+# Generate fresh report
+npx playwright show-report
+```
+
+### Allure Reports
+
+Allure provides beautiful HTML reports with:
+- Test execution trends over time
+- Duration statistics
+- Failure categorization
+- Screenshots on failures
+- Request/response logs
+```bash
+# Generate and open Allure report (with historical trends)
+make allure-report
+
+# Or step by step:
+make allure-generate    # Generate report
+make allure-open        # Open in browser
+```
+
+**Allure Features:**
+- Historical trends (passes/failures over time)
+- Categorized failures
+- Timeline visualization
+- Detailed test logs
+- Screenshot attachments
+
+### Prometheus + Grafana Monitoring
+
+Monitor test metrics in real-time:
+```bash
+# 1. Run tests to generate metrics
+make test
+
+# 2. Generate Prometheus metrics
 make test-metrics
-```
-This creates
-```
-metrics/playwright-metrics.prom
-```
-The `make test-metrics` target runs the TypeScript metrics script directly using `tsx` (no manual compile step required):
 
+# 3. Start monitoring stack (Prometheus + Grafana)
+make monitoring-up
+```
+
+**Access Dashboards:**
+- 🔵 **Grafana**: http://localhost:3000 (admin/admin)
+- 🟠 **Prometheus**: http://localhost:9090
+- 🟢 **Metrics Server**: http://localhost:9464/metrics
+
+**Stop Monitoring:**
 ```bash
-# invokes: npx tsx metrics/generate-metrics.ts
-make test-metrics
+make monitoring-down
 ```
 
-If your environment does not have `tsx` locally, `npx tsx` will fetch it automatically. Alternatives:
+**Available Metrics:**
+- `playwright_tests_total` - Total test count
+- `playwright_tests_passed` - Passed tests
+- `playwright_tests_failed` - Failed tests
+- `playwright_tests_skipped` - Skipped tests
+- `playwright_test_duration_seconds` - Test duration
 
-- Compile then run (works on any Node setup):
+### Logs
 
-```bash
-npx tsc -p tsconfig.json --outDir .build
-node .build/metrics/generate-metrics.js
-rm -rf .build
+Winston logger creates structured logs:
+```
+logs/
+├── test-run-<timestamp>.log    # Current run (debug level)
+└── master.log                  # All runs (append mode)
 ```
 
-- Run with `ts-node` ESM loader (less recommended due to loader warnings on some Node versions):
+**Log Levels:**
+- `info` - Important events (console + file)
+- `debug` - Detailed debugging (file only)
+- `warn` - Warnings
+- `error` - Errors with stack traces
 
-```bash
-node --loader ts-node/esm metrics/generate-metrics.ts
+**Usage in tests:**
+```typescript
+BaseTest.logger.info("Test starting...");
+BaseTest.logger.debug("Detailed debug info");
+BaseTest.logger.error("Test failed:", error);
 ```
 
-3. **Start the monitoring stack (Prometheus + Grafana + Metrics server)**
- ```bash
- make monitoring-up
- or
- docker compose up -d
- ```
- This will spin up
- - Metrics Server at http://localhost:9464/metrics
- - Grafan UI at http://localhost:3000
- - Prometheus at http://localhost:9090
+---
+## Configuration
 
- >Now play
+### Environment Files
 
- ---
- ## Database Service (dbclient.ts)
+Create `.env.stage` or `.env.prod`:
+```env
+# API Configuration
+api_base_url=https://api.realworld.io
+api_base_path=/api
 
-The DatabaseService utility lets your Playwright tests or Node/TS project execute SQL queries against a PostgreSQL database, with optional SSH tunnel support.
+# UI Configuration
+dashboard_url=https://app.example.com
+domain=.example.com
 
-### COnfiguration
-DatabaseService reads DB & SSH settings from the config file.
-**example config.ts**
-```ts
-export default {
-  db: {
-    enabled: true,
-    host: "your-db-host",   // remote db host (actual DB host)
-    port: 5432,
-    name: "dbname",
-    user: "dbuser",
-    password: "secret",
+# Database (PostgreSQL)
+DB_ENABLED=true
+PG_DB_HOST=localhost
+PG_DB_PORT=5432
+PG_DB_NAME=testdb
+DB_USER=postgres
+DB_PASSWORD=secret
 
-    ssh: {
-      useSsh: true,                          // <--- Toggle SSH ON/OFF
-      host: "bastion.example.com",           // <--- SSH jump host
-      port: 22,
-      username: "ubuntu",
-      privateKeyPath: "./id_rsa"             // Path to private key
-    }
-  }
+# Database (MySQL)
+MYS_DB_HOST=localhost
+MYS_DB_PORT=3306
+MYS_DB_NAME=testdb
+
+# SSH Tunnel (optional)
+USE_SSH=false
+SSH_HOST=bastion.example.com
+SSH_PORT=22
+SSH_USER=ubuntu
+SSH_KEY_PATH=~/.ssh/id_rsa
+
+# Auth (UI Tests)
+AUTH_KEY=authState
+AUTH_TOKEN=your-token-here
+AUTH_USER_EMAIL=test@example.com
+AUTH_USER_NAME=Test User
+```
+
+### Consul Configuration (Optional)
+
+Enable centralized config management:
+```typescript
+// src/sharedUtils/config.ts
+const config = {
+  useConsul: true,
+  consulHost: "127.0.0.1",
+  consulPort: 8500,
+  consulPrefix: "ParcelQuest",
+  // ...
 };
 ```
-> If useSsh = false, DB connects directly — no SSH tunnel will be used.
 
-### Required Environment Variables (Optional)
+Consul allows dynamic configuration updates without redeploying tests.
 
-```env
-# mysql configurations
-MYS_DB_HOST=<db_host>
-MYS_DB_PORT=<port>
-MYS_DB_NAME=<db_name>
+---
+## Tech Stack
 
-# postgres configurations
-PG_DB_HOST=<pg_host>
-PG_DB_PORT=<pg_port>
-PG_DB_NAME=<pg_name>
+| Category | Technology | Purpose |
+|----------|-----------|---------|
+| **Language** | TypeScript 5.0 | Type safety, IntelliSense |
+| **Test Runner** | Playwright Test | API & UI testing |
+| **Assertions** | Playwright expect | Built-in assertions |
+| **Data Generation** | Faker.js | Realistic test data |
+| **Validation** | AJV + Zod | Schema validation |
+| **Logging** | Winston | Structured logging |
+| **Reporting** | Allure, Playwright HTML | Test reports |
+| **Monitoring** | Prometheus + Grafana | Metrics & dashboards |
+| **Config** | dotenv + Consul | Environment management |
+| **Database** | pg + mysql2 | PostgreSQL & MySQL |
+| **Build** | TypeScript compiler | Compilation |
+| **Automation** | Makefile | Build automation |
+| **Containers** | Docker + Docker Compose | Monitoring stack |
 
-# SSH settings
-USE_SSH=<true/false>
-SSH_HOST=<host>
-SSH_PORT=<port>
-SSH_USER=<user>
-SSH_KEY_PATH=<your_path>
+---
+
+## Makefile Commands Reference
+
+### Setup & Installation
+```bash
+make all             # Full setup (deps + playwright + build)
+make node            # Install Node.js via nvm
+make deps            # Install npm dependencies
+make playwright      # Install Playwright browsers
+make setup           # Install deps + playwright
+make build           # TypeScript type-check
 ```
-### Usage
-Run a DB query from anywhere (e.g., Playwright test):
-```ts
-import { DatabaseService } from "../utils/dbClient";
 
-test("Verify DB record", async () => {
-  const result = await DatabaseService.query(
-    `SELECT * FROM users WHERE email = $1`,
-    [ "test@example.com" ]
-  );
-
-  console.log(result);
-});
+### Testing
+```bash
+make test                                    # Run all tests (stage env)
+make test-env ENV=prod                       # Run with specific env
+make test-file FILE=                   # Run specific file
+make test-file FILE= ENV=prod          # Run file with env
+make test-tag TAG="smoke"                    # Run by tag
+make test-tag TAG="api and smoke"            # AND condition
+make test-tag TAG="api or ui"                # OR condition
+make test RCOUNT=5                           # Repeat tests 5 times
+make test-tag TAG="smoke" RCOUNT=10          # Repeat tag tests
 ```
-### Connection Logic
-```
-if (useSsh == true)
-     create SSH tunnel (port 5433)
-     connect DB → localhost:5433
-else
-     connect DB → config.host:config.port
 
-execute query
-cleanup connection & tunnel
+### Reporting
+```bash
+make report                  # View Playwright HTML report
+make allure-generate         # Generate Allure report
+make allure-open             # Open Allure report
+make allure-report           # Generate + open with trends
+```
+
+### Monitoring
+```bash
+make test-metrics            # Generate Prometheus metrics
+make monitoring-up           # Start Prometheus + Grafana
+make monitoring-down         # Stop monitoring stack
+```
+
+### Utilities
+```bash
+make clean-logs              # Delete and recreate logs directory
+make help                    # Show all available commands
 ```
 
 ---
 
-## 💙 Made with Love 
+## Advanced Usage
 
-This framework is built and maintained with care, precision.
+### Override Fixtures with test.use()
 
-### Contributors
-- **Reyad Hassan**
+Override baseURL for specific tests:
+```typescript
+// File-level override
+test.use({
+  apiContext: async ({}, use) => {
+    const context = await request.newContext({
+      baseURL: "https://api.github.com"
+    });
+    await use(context);
+    await context.dispose();
+  }
+});
+
+test("GitHub API test", async ({ apiClient }) => {
+  // Uses GitHub base URL
+});
+```
+
+See [Fixtures Guide](./docs/FIXTURES.md) for complete examples.
+
+### Database Validation
+```typescript
+test("Verify DB record", async ({ rwService }) => {
+  // Create via API
+  const response = await rwService.registerUser(payload);
+  const { email } = (await response.json()).user;
+
+  // Verify in database
+  const dbResults = await BaseTest.dbClient.query(
+    'postgres',
+    'SELECT * FROM users WHERE email = $1',
+    [email]
+  );
+
+  expect(dbResults.length).toBe(1);
+  expect(dbResults[0].email).toBe(email);
+});
+```
+
+### Network Interception (UI)
+```typescript
+test("Mock API response", async ({ poManager }) => {
+  const page = poManager.getCreateQuestPage().page;
+
+  // Intercept and mock response
+  await page.route('**/api/quests', route => {
+    route.fulfill({
+      status: 200,
+      body: JSON.stringify({ success: true })
+    });
+  });
+
+  // Continue test with mocked response
+});
+```
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+### Development Guidelines
+
+- Use TypeScript strict mode
+- Follow existing code style
+- Add JSDoc comments for public methods
+- Write tests for new features
+- Update documentation
+- Run `make build` before committing
+
+---
+
+## License
+
+This project is licensed under the MIT License.
+
+---
+
+## Contributors
+
+- **Reyad Hassan** - *Initial work*
+
+---
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
+- **Documentation**: [Wiki](https://github.com/your-repo/wiki)
+- **Discussions**: [GitHub Discussions](https://github.com/your-repo/discussions)
+
+---
+
+## Acknowledgments
+
+- Playwright team for the amazing testing framework
+- Community contributors
+- Open source libraries used in this project
+
+---
+
+**Built with ❤️ using Playwright, TypeScript & Makefile**
+
+⭐ Star this repo if you find it useful!
+
+---
+
+## Quick Links
+
+- [API Testing Guide](./docs/API_TESTING.md)
+- [UI Testing Guide](./docs/UI_TESTING.md)
+- [Fixtures Reference](./docs/FIXTURES.md)
+- [Database Guide](./docs/DATABASE.md)
+- [Examples](./docs/EXAMPLES.md)
+- [Makefile Commands](./docs/MAKEFILE.md)
+
+
 
 ---
 

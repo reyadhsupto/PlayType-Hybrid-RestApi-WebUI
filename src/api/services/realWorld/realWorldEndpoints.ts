@@ -6,8 +6,6 @@ import { ApiClient } from "../../client.js";
 import { logger } from "../../../sharedUtils/logger.js";
 
 /**
- * realWorldService Class
- * 
  * Service class for RealWorld API endpoints.
  * Extends BaseService to inherit common API functionality.
  * 
@@ -24,25 +22,20 @@ export class realWorldService extends BaseService {
   protected basePath: string;
 
   /**
-   * Constructor - Initializes realWorldService with dependencies
-   * 
    * @constructor
    * @param {ApiClient} apiClient - API client for HTTP requests
-   * @param {typeof logger} loggerInstance - Winston logger instance from logger.ts
    * @param {string} basePath - Base path for API endpoints (e.g., "/api")
    * 
    * @description
    * Calls parent constructor with injected dependencies.
    * Sets basePath for this service.
    */
-  constructor(apiClient: ApiClient, loggerInstance: typeof logger, basePath: string) {
-    super(apiClient, loggerInstance);
+  constructor(apiClient: ApiClient, basePath: string) {
+    super(apiClient);
     this.basePath = basePath;
   }
 
   /**
-   * registerUser Method
-   * 
    * Registers a new user account.
    * 
    * @method registerUser
@@ -66,8 +59,6 @@ export class realWorldService extends BaseService {
   }
 
   /**
-   * loginUser Method
-   * 
    * Authenticates user and returns token.
    * 
    * @method loginUser
@@ -91,8 +82,6 @@ export class realWorldService extends BaseService {
   }
 
   /**
-   * createArticle Method
-   * 
    * Creates a new article.
    * 
    * @method createArticle
@@ -118,8 +107,6 @@ export class realWorldService extends BaseService {
   }
 
   /**
-   * getArticles Method
-   * 
    * Fetches list of articles with optional filters.
    * 
    * @method getArticles
@@ -149,8 +136,6 @@ export class realWorldService extends BaseService {
   }
 
   /**
-   * getExternalUser Method
-   * 
    * Fetches user data from external JSONPlaceholder API.
    * 
    * @method getExternalUser
@@ -173,8 +158,6 @@ export class realWorldService extends BaseService {
   }
 
   /**
-   * callWebhook Method
-   * 
    * Calls external webhook with event data.
    * 
    * @method callWebhook
@@ -199,8 +182,6 @@ export class realWorldService extends BaseService {
   }
 
   /**
-   * searchGitHubRepos Method
-   * 
    * Searches GitHub repositories.
    * 
    * @method searchGitHubRepos

@@ -10,13 +10,13 @@ export default defineConfig({
   timeout: 60 * 1000,
   retries: 0,
   workers: 4,
-  use: {
-    baseURL: process.env.BASE_URL || "https://staging-api.example.com",
-    extraHTTPHeaders: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.AUTH_TOKEN}`,
-    },
-  },
+  // use: {
+  //   baseURL: process.env.BASE_URL || "https://staging-api.example.com",
+  //   extraHTTPHeaders: {
+  //     "Content-Type": "application/json",
+  //     Authorization: `Bearer ${process.env.AUTH_TOKEN}`,
+  //   },
+  // },
   projects: [
     {
       name: 'Chromium',
