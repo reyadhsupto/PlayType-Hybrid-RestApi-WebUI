@@ -277,7 +277,7 @@ Comprehensive guides available in `/docs`:
 | **[Makefile Commands](./docs/MAKEFILE.md)** | Complete Makefile reference |
 
 ---
-## 🧪 Test Execution
+## Test Execution
 
 ### Using Makefile (Recommended)
 ```bash
