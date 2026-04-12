@@ -13,12 +13,12 @@ import { registerUserSchemaZod, loginUserSchema } from "../schemas.js"
 // });
 let email : string = "";
 let password: string = "password";
-test.describe.configure({ mode: 'serial' });  // Forces sequential execution
+// test.describe.configure({ mode: 'serial' });  // Forces sequential execution
 
-test.describe( "Register, login user, update user", { tag: ['@SC_001'] }, ()=>{
+test.describe.serial( "Register, login user, update user", { tag: ['@SC_001'] }, ()=>{
     test("Verify that Api returns 201 created upon successfull user registration", {tag: ["@TC_001"]}, async ({ rwService }) => {
     BaseTest.logTestTitle("Test Details:", test.info().title);
-
+    
     const response = await rwService.registerUser( 
       BaseTest.generator.registerUser(
         )
@@ -35,7 +35,7 @@ test.describe( "Register, login user, update user", { tag: ['@SC_001'] }, ()=>{
 
     const response = await rwService.loginUser( BaseTest.generator.loginUser(email, password) );
 
-    await rwService.assertStatus(response, 200);
+    await rwService.assertStatus(response, 201);
     await rwService.validateField(response, "user.email", email);
     await rwService.validateZodSchema(response , loginUserSchema);
   });
@@ -49,6 +49,25 @@ test.describe( "Check direct api call", { tag: ['@SC_002'] }, ()=>{
       method: 'GET'
     });
     await rwService.assertStatus(response, 200);
+
+  });
+});
+
+test.describe( "Check fixture test.use", { tag: ['@SC_003'] }, ()=>{
+        test.use({
+         baseURL: "https://api.p-stageenv.xyz",
+         extraHTTPHeaders: { "Authorization": "Bearer token123" }
+      });
+    test("004 Verify that Api returns all user list with 200 OK", {tag: ["@TC_004"]}, async ({apiClient, rwService}) => {
+    BaseTest.logTestTitle("Test Details:", test.info().title);
+
+    const response = await rwService.registerUser( 
+      BaseTest.generator.registerUser(
+        )
+    );
+
+    await rwService.assertStatus(response, 201);
+    await rwService.validateZodSchema(response , registerUserSchemaZod);
 
   });
 });

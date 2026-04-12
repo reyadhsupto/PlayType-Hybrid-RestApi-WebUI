@@ -1,3 +1,5 @@
+// fixtures/global-teardown.ts
+
 import * as fs from 'fs';
 import * as path from 'path';
 import { time_now, runLogFile, masterLogFile } from '../src/sharedUtils/logger';

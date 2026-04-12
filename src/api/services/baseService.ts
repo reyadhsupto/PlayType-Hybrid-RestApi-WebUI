@@ -1,6 +1,6 @@
 // src/api/services/baseService.ts
 
-import { APIResponse, expect } from "@playwright/test";
+import { APIResponse, expect, test } from "@playwright/test";
 import { ApiRequestOptions, DirectCallOptions, ApiClient } from "../client.js";
 import { Validator } from "../validator.js";
 import { logger } from "../../sharedUtils/logger.js";
@@ -184,7 +184,8 @@ export abstract class BaseService {
     if (actualStatus === expectedStatus) {
       this.logger.info(`Response status ${actualStatus} matches with expected ${expectedStatus}`);
     } else {
-      this.logger.error(`Response status ${actualStatus} does NOT match expected ${expectedStatus}`);
+      this.logger.error(`[Assertion Failure: Api Response Status]`);
+      this.logger.error(`Expected: ${expectedStatus} / Actual: ${actualStatus}`);
     }
     expect(actualStatus).toBe(expectedStatus);
   }
@@ -209,9 +210,24 @@ export abstract class BaseService {
    * Uses AJV internally for schema validation.
    */
   async validateSchema(response: APIResponse, schema: object): Promise<void> {
-    const body = await response.json();
-    // Uses static Validator method
+    let body: any;
+    
+    try {
+      body = await response.json();
+    } catch (error) {
+      this.logger.error(`Failed to parse response as JSON: ${error}`);
+      this.logger.error(`Response text: ${await response.text()}`);
+      throw error;
+    }
+    
     const isValid = Validator.validateSchema(schema, body);
+    
+    if (!isValid) {
+      this.logger.error(`Schema validation failed`);
+      this.logger.error(`Expected schema: ${JSON.stringify(schema, null, 2)}`);
+      this.logger.error(`Actual response: ${JSON.stringify(body, null, 2)}`);
+    }
+    
     expect(isValid).toBe(true);
   }
 
@@ -235,9 +251,22 @@ export abstract class BaseService {
    * Provides better TypeScript integration than JSON Schema.
    */
   async validateZodSchema(response: APIResponse, zodSchema: z.ZodTypeAny): Promise<void> {
-    const responsebody = await response.json();
-    // Uses static Validator method
+    let responsebody: any;
+    
+    try {
+      responsebody = await response.json();
+    } catch (error) {
+      this.logger.error(`Failed to parse response as JSON: ${error}`);
+      throw error;
+    }
+    
     const isValid = Validator.validateZodSchema(zodSchema, responsebody);
+    
+    if (!isValid) {
+      this.logger.error(`Zod schema validation failed`);
+      this.logger.error(`Response body: ${JSON.stringify(responsebody, null, 2)}`);
+    }
+    
     expect(isValid).toBe(true);
   }
 
@@ -289,22 +318,82 @@ export abstract class BaseService {
         const expected = String(expectedValue).trim();
         isMatch = Validator.validateFieldValue(body, field, expected);
 
-        if (isMatch) {
-          this.logger.info(`Plain text response matches expected value.`);
-        } else {
-          this.logger.debug(
-            `Plain text response mismatch.\nExpected: ${expected}\nActual: ${actualValue}`
-          );
+        if (!isMatch) {
+          this.logger.error(`[Plain Field] Field validation failed for: ${field}.\n Expected: ${expected} \n Actual: ${actualValue}\n`);
         }
       }
 
-      // Assert match
+      if (!isMatch && typeof body === "object") {
+        const actualValue = Validator.getNestedValue(body, field);
+        this.logger.error(`[Nested Field] Field validation failed for: ${field}.\n Expected: ${expectedValue} \n Actual: ${actualValue}\n`);
+        // this.logger.error(`Full response: ${JSON.stringify(body, null, 2)}`);
+      }
+
       expect(isMatch).toBe(true);
 
     } catch (err) {
-      // Log error and re-throw
-      this.logger.error(`Field validation failed for "${field}": ${err}`);
+      this.logger.error(`Field validation error for "${field}": ${err}`);
       throw err;
+    }
+  }
+
+  /**
+   * Attaches detailed failure information to Playwright HTML reporter.
+   * Does NOT log to terminal - only to reporter.
+   * Call this from your assertion methods when they fail.
+   * 
+   * @protected
+   * @method attachFailureDetailsToReport
+   * @async
+   * 
+   * @param {string} title - Title of the failure (e.g., "API Status Mismatch", "Field Validation Failed")
+   * @param {Record<string, any>} details - Key-value pairs of failure details to display
+   * 
+   * @returns {Promise<void>} No return value
+   * 
+   * @description
+   * Creates formatted HTML attachment in Playwright report with failure details.
+   * Useful for keeping terminal clean while providing comprehensive debugging info.
+   * 
+   * @example
+   * // In assertStatus method:
+   * if (actualStatus !== expectedStatus) {
+   *   await this.attachFailureDetailsToReport("API Status Mismatch", {
+   *     "Expected Status": expectedStatus,
+   *     "Actual Status": actualStatus,
+   *     "Response Headers": response.headers(),
+   *     "Response Body": responseBody
+   *   });
+   * }
+   * 
+   * // In validateField method:
+   * if (!isMatch) {
+   *   await this.attachFailureDetailsToReport("Field Validation Failed", {
+   *     "Field": field,
+   *     "Expected": expectedValue,
+   *     "Actual": actualValue,
+   *     "Full Response": body
+   *   });
+   * }
+   */
+  protected async attachFailureDetailsToReport(title: string, details: Record<string, any>): Promise<void> {
+    try {
+      // Build JSON string for text attachment (simpler, no HTML rendering issues)
+      const detailsText = Object.entries(details)
+        .map(([key, value]) => {
+          const displayValue = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+          return `${key}:\n${displayValue}`;
+        })
+        .join('\n' + '='.repeat(80) + '\n');
+
+      const reportText = `${title}\n${'='.repeat(80)}\n${detailsText}`;
+
+      await test.info().attach(title, {
+        body: reportText,
+        contentType: "text/plain",
+      });
+    } catch (error) {
+      this.logger.warn(`Could not attach failure details to report: ${error}`);
     }
   }
 }

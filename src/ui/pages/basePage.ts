@@ -1,9 +1,10 @@
 // src/ui/pages/basePage.ts
 
 import { HelperActions } from '../actions/helperActions.js';
-import { Browser, Page, BrowserContext, chromium } from '@playwright/test';
+import { Browser, Page, BrowserContext, chromium, test } from '@playwright/test';
 import config from '../../sharedUtils/config.js';
 import { setupAuth } from '../uiUtils/authUtils.js';
+import { logger } from '../../sharedUtils/logger.js';
 
 export class BasePage {
   page!: Page;
@@ -28,12 +29,75 @@ export class BasePage {
     await setupAuth(this.context, url);
 
     this.page = await this.context.newPage();
+
+    // Setup error handlers
+    this.setupErrorHandlers();
     await this.page.goto(url);
+
+    // store storatestate
+    // await this.context.storageState({ path: "storagestate.json" });
 
     // Initialize helperActions
     this.helperActions = new HelperActions(this.page, this.context);
 
     return this.page;
+  }
+
+  /**
+   * Setup error handlers for automatic logging
+   */
+  private setupErrorHandlers(): void {
+    // Log console errors from page
+    this.page.on('console', msg => {
+      if (msg.type() === 'error') {
+        logger.error(`Browser console error: ${msg.text()}`);
+      }
+    });
+
+    // Log page errors
+    this.page.on('pageerror', error => {
+      logger.error(`Page error: ${error.message}`);
+      logger.error(`Stack: ${error.stack}`);
+    });
+
+    // Log request failures
+    this.page.on('requestfailed', request => {
+      logger.error(`Request failed: ${request.url()}`);
+      logger.error(`Failure: ${request.failure()?.errorText}`);
+    });
+  }
+
+    /**
+   * Take screenshot with automatic naming
+   */
+  async takeScreenshot(name?: string): Promise<void> {
+    const screenshotName = name || `screenshot-${Date.now()}.png`;
+    const screenshotPath = `screenshots/${screenshotName}`;
+    
+    await this.page.screenshot({ 
+      path: screenshotPath,
+      fullPage: true 
+    });
+    
+    logger.info(`Screenshot saved: ${screenshotPath}`);
+    
+    // Attach to test report
+    await test.info().attach(screenshotName, {
+      path: screenshotPath,
+      contentType: 'image/png'
+    });
+  }
+
+  /**
+   * Take screenshot on failure (call in catch blocks)
+   */
+  async screenshotOnFailure(testName: string): Promise<void> {
+    try {
+      const screenshotName = `failure-${testName.replace(/\s+/g, '-')}-${Date.now()}.png`;
+      await this.takeScreenshot(screenshotName);
+    } catch (error) {
+      logger.error(`Failed to take screenshot: ${error}`);
+    }
   }
 
   /**

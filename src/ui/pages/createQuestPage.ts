@@ -1,18 +1,21 @@
 // src/ui/pages/createQuestPage.ts
 
-import { Page } from '@playwright/test';
+import { Locator, Page } from '@playwright/test';
 import { BasePage } from './basePage.js';
 
 export class CreateQuestPage extends BasePage {
+
+  readonly plusIcon: Locator;
   constructor(page: Page) {
     super(page);
     this.page = page;
+    this.plusIcon = this.page.locator('.fa.fa-plus');
   }
 
   async clickCreateButton() {
     await this.click('.fa.fa-plus');
     // await this.waitForSeconds(15);
-    await this.pause();
+    // await this.pause();
   }
 
   async fillQuestForm({ name, description }: { name: string; description: string }) {

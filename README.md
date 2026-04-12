@@ -654,12 +654,6 @@ This project is licensed under the MIT License.
 
 ---
 
-## Contributors
-
-- **Reyad Hassan** - *Initial work*
-
----
-
 ## Support
 
 - **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
