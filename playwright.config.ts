@@ -1,27 +1,40 @@
+// playwright.config.ts
+
 import { defineConfig, devices } from '@playwright/test';
 import * as dotenv from "dotenv";
 dotenv.config();
 
 export default defineConfig({
   testDir: './tests',
-  fullyParallel: false,
+  fullyParallel: true,
   globalSetup: './fixtures/global-setup.ts',
   globalTeardown: './fixtures/global-teardown.ts',
   timeout: 60 * 1000,
   retries: 0,
   workers: 4,
-  // use: {
-  //   baseURL: process.env.BASE_URL || "https://staging-api.example.com",
-  //   extraHTTPHeaders: {
-  //     "Content-Type": "application/json",
-  //     Authorization: `Bearer ${process.env.AUTH_TOKEN}`,
-  //   },
-  // },
+  use: {
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    trace: 'on-first-retry',
+    actionTimeout: 15 * 1000,
+    navigationTimeout: 30 * 1000,
+    // baseURL: process.env.BASE_URL || "https://staging-api.example.com",
+    // extraHTTPHeaders: {
+    //   "Content-Type": "application/json",
+    //   Authorization: `Bearer ${process.env.AUTH_TOKEN}`,
+    // },
+  },
   projects: [
     {
       name: 'Chromium',
       testDir: './tests/ui',
-      use: { browserName: 'chromium' },
+      use: { 
+        browserName: 'chromium',
+        screenshot: 'only-on-failure',
+        video: 'retain-on-failure',
+        // storageState: 
+       },
+      
     },
     // {
     //   name: 'Firefox',
@@ -59,10 +72,12 @@ export default defineConfig({
       use: {
         browserName: 'chromium', // required internally but not used
         headless: true,
+        screenshot: 'off',
+        video: 'off',
       },
     }
   ],
-  reporter: [['list'], ['html', { outputFolder: 'reports' }],["json", { outputFile: "playwright-report/results.json" }],
+  reporter: [['list'], ['html', { outputFolder: 'reports', open: 'always' }],["json", { outputFile: "playwright-report/results.json" }],
     [
       "allure-playwright",
       {

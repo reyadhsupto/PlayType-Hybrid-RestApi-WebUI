@@ -1,3 +1,5 @@
+// fixtures/global-setup.ts
+
 import * as fs from 'fs';
 import * as path from 'path';
 import config from "../src/sharedUtils/config.ts"
