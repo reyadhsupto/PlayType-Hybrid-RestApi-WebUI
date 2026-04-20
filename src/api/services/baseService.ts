@@ -4,7 +4,10 @@ import { APIResponse, expect, test } from "@playwright/test";
 import { ApiRequestOptions, DirectCallOptions, ApiClient } from "../client.js";
 import { Validator } from "../validator.js";
 import { logger } from "../../sharedUtils/logger.js";
+import { step } from '../../sharedUtils/stepDecorator.js';
 import { z } from "zod";
+
+export { step };
 
 /**
  * Base class for all API service endpoints.
@@ -186,6 +189,19 @@ export abstract class BaseService {
     } else {
       this.logger.error(`[Assertion Failure: Api Response Status]`);
       this.logger.error(`Expected: ${expectedStatus} / Actual: ${actualStatus}`);
+      
+      // Read response body once and pass to reporter
+      try {
+        const responseBody = await response.json().catch(() => response.text().catch(() => "Unable to parse response"));
+        await this.attachFailureDetailsToReport("API Status Assertion Failed", {
+          "Expected Status": expectedStatus,
+          "Actual Status": actualStatus,
+          "Response Headers": response.headers(),
+          "Response Body": responseBody
+        });
+      } catch (error) {
+        this.logger.warn(`Could not read response for reporting: ${error}`);
+      }
     }
     expect(actualStatus).toBe(expectedStatus);
   }

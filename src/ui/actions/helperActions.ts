@@ -1,8 +1,10 @@
 import { Page, BrowserContext, Response } from '@playwright/test';
+import { logger } from '../../sharedUtils/logger.js';
 
 export class HelperActions {
 	page: Page;
 	context: BrowserContext;
+	protected logger = logger;
 
 	constructor(page: Page, context: BrowserContext) {
 		this.page = page;
@@ -16,6 +18,7 @@ export class HelperActions {
 	 * @returns Promise<void>
 	 */
 	async interceptRequests(url: string | RegExp, handler: Parameters<Page['route']>[1]): Promise<void> {
+		this.logger.info(`Request intercepted: ${url}`);
 		await this.page.route(url, handler);
 	}
 
@@ -28,10 +31,12 @@ export class HelperActions {
 	 * @returns Promise<void>
 	 */
 	async fulfillRoute(route: any, body: any, status = 200, contentType = 'application/json'): Promise<void> {
+		this.logger.info(`Fulfilling route for: ${route.request().method()} ${route.request().url()}`);
 		await route.fulfill({
 			status,
 			contentType,
-			body: typeof body === 'string' ? body : JSON.stringify(body)
+			body: typeof body === 'string' ? body : JSON.stringify(body),
+			
 		});
 	}
 
@@ -112,7 +117,7 @@ export class HelperActions {
 	 */
 	async takeDialogAction(action:'accept' | 'dismiss' = 'accept' ) {
 		this.page.once('dialog', async dialog => {
-            console.log(`Handling dialog: ${dialog.message()}`);
+            logger.info(`Handling dialog: ${dialog.message()}`);
             
             if (action === 'accept') {
                 await dialog.accept();

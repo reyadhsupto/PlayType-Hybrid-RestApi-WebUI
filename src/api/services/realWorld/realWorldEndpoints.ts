@@ -1,6 +1,6 @@
 // src/api/services/realWorld/realWorldEndpoints.ts
 
-import { BaseService } from "../baseService.js";
+import { step , BaseService } from "../baseService.js";
 import { APIResponse } from "@playwright/test";
 import { ApiClient } from "../../client.js";
 import { logger } from "../../../sharedUtils/logger.js";
@@ -50,6 +50,7 @@ export class realWorldService extends BaseService {
    * POST to /users endpoint.
    * Uses callApi (baseURL + basePath + "users").
    */
+  @step('Call Register User api')
   async registerUser(payload: object): Promise<APIResponse> {
     return this.callApi({
       method: "POST",

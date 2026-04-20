@@ -1,10 +1,22 @@
 // src/ui/pages/basePage.ts
 
 import { HelperActions } from '../actions/helperActions.js';
-import { Browser, Page, BrowserContext, chromium, test } from '@playwright/test';
+import { Browser, Page, BrowserContext, chromium, test, Locator } from '@playwright/test';
 import config from '../../sharedUtils/config.js';
 import { setupAuth } from '../uiUtils/authUtils.js';
 import { logger } from '../../sharedUtils/logger.js';
+import { step } from '../../sharedUtils/stepDecorator.js';
+
+/**
+ * Re-export step decorator for convenience
+ * This allows using @step directly in page objects without importing
+ * @example
+ * export class MyPage extends BasePage {
+ *   @step('Doing something {{param}}')
+ *   async myMethod(param: string) { }
+ * }
+ */
+export { step };
 
 export class BasePage {
   page!: Page;
@@ -17,7 +29,7 @@ export class BasePage {
 
   helperActions!: HelperActions;
 
-  async setup(url: string = config.dashboard_url) {
+  async setup(url: string = config.dashboard_url, setupauth: boolean) {
     this.browser = await chromium.launch({
         headless: config.headless,
         slowMo: 0,
@@ -26,12 +38,14 @@ export class BasePage {
     this.context = await this.browser.newContext();
 
     //Mock gauth state as already Logged-in
-    await setupAuth(this.context, url);
+    if (setupauth == true){
+      await setupAuth(this.context, url);
+    }
 
     this.page = await this.context.newPage();
 
     // Setup error handlers
-    this.setupErrorHandlers();
+    // this.setupErrorHandlers();
     await this.page.goto(url);
 
     // store storatestate
@@ -118,6 +132,7 @@ export class BasePage {
 
   /**
    * Waits for page load (network idle).
+   * This waits for JavaScript to finish executing and DOM to be stable
    */
   async waitForPageLoadIdle() {
     await this.page.waitForLoadState('networkidle');
@@ -181,8 +196,8 @@ export class BasePage {
    * @param locator - The selector for the element to click.
    * @returns Promise<void>
    */
-  async click(locator: string): Promise<void> {
-    await this.page.locator(locator).click();
+  async click(locator: Locator): Promise<void> {
+    await locator.click();
   }
 
   /**
@@ -200,8 +215,9 @@ export class BasePage {
    * @param text - The text to fill into the input.
    * @returns Promise<void>
    */
-  async fill(locator: string, text: string): Promise<void> {
-    await this.page.locator(locator).fill(text);
+  async fill(locator: Locator, text: string): Promise<void> {
+    await this.click(locator);
+    await locator.fill(text);
   }
 
   /**

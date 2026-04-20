@@ -5,6 +5,8 @@ import { POManager } from '../src/ui/poManager.js';
 import { BasePage } from '../src/ui/pages/basePage.js';
 import { CreateQuestPage } from '../src/ui/pages/createQuestPage.js';
 import { UpdateQuestPage } from '../src/ui/pages/updateQuestPage.js';
+import { SignupRealWorld } from '../src/ui/pages/signupRealWorld.js';
+
 import config from '../src/sharedUtils/config.js';
 
 /**
@@ -33,13 +35,14 @@ export const test = base.extend<{
   poManager: POManager;
   createQuestPage: CreateQuestPage;
   updateQuestPage: UpdateQuestPage;
+  signupPage: SignupRealWorld;
 }>({
   basePage: async ({}, use) => {
     // Create a BasePage without a page (will be created in setup)
     const basePage = new BasePage(null as any); // Temporary
     
     // Setup creates browser/context/page
-    await basePage.setup(config.dashboard_url);
+    await basePage.setup(config.dashboard_url, config.setupUiAuth);
     
     await use(basePage);
     
@@ -56,7 +59,6 @@ export const test = base.extend<{
   /**
    * createQuestPage Fixture
    * Provides direct access to CreateQuestPage without using POManager
-   * Useful for tests focused on a single page
    */
   createQuestPage: async ({ basePage }, use) => {
     const createQuestPage = new CreateQuestPage(basePage.page);
@@ -66,10 +68,19 @@ export const test = base.extend<{
   /**
    * updateQuestPage Fixture
    * Provides direct access to UpdateQuestPage without using POManager
-   * Useful for tests focused on a single page
    */
   updateQuestPage: async ({ basePage }, use) => {
     const updateQuestPage = new UpdateQuestPage(basePage.page);
     await use(updateQuestPage);
   },
+
+  /**
+   * singup page Fixture
+   * Provides direct access to signupPage without using POManager
+   */
+  signupPage: async ({ basePage }, use) => {
+    const signupPage = new SignupRealWorld(basePage.page);
+    await use(signupPage);
+  },
+
 });
