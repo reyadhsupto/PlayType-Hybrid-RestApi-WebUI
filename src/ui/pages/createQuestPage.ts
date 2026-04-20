@@ -13,9 +13,9 @@ export class CreateQuestPage extends BasePage {
   }
 
   async clickCreateButton() {
-    await this.click('.fa.fa-plus');
+    await this.click(this.plusIcon);
     // await this.waitForSeconds(15);
-    // await this.pause();
+    await this.pause();
   }
 
   async fillQuestForm({ name, description }: { name: string; description: string }) {

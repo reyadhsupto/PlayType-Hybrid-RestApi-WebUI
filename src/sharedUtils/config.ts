@@ -22,6 +22,7 @@ const config = {
   consulHost: "127.0.0.1",
   consulPort: 8500,
   consulPrefix: "ParcelQuest",
+  setupUiAuth: false,
 
   headless: false,
 

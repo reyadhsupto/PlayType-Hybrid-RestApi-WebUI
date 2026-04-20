@@ -6,7 +6,7 @@ dotenv.config();
 
 export default defineConfig({
   testDir: './tests',
-  fullyParallel: true,
+  fullyParallel: false,
   globalSetup: './fixtures/global-setup.ts',
   globalTeardown: './fixtures/global-teardown.ts',
   timeout: 60 * 1000,
