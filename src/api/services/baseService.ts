@@ -1,6 +1,6 @@
 // src/api/services/baseService.ts
 
-import { APIResponse, expect, test } from "@playwright/test";
+import { APIResponse, test } from "@playwright/test";
 import { ApiRequestOptions, DirectCallOptions, ApiClient } from "../client.js";
 import { Validator } from "../validator.js";
 import { logger } from "../../sharedUtils/logger.js";
@@ -8,6 +8,34 @@ import { step } from '../../sharedUtils/stepDecorator.js';
 import { z } from "zod";
 
 export { step };
+
+/**
+ * Assertion execution mode used by BaseService validation helpers.
+ *
+ * - hard: fail immediately
+ * - soft: record and log the failure without throwing
+ */
+export type AssertionMode = "hard" | "soft";
+
+/**
+ * Common options shared by assertion helpers.
+ *
+ * @property {AssertionMode} mode - Hard or soft assertion behavior
+ */
+export type AssertionOptions = {
+  mode?: AssertionMode;
+};
+
+/**
+ * Captured soft assertion failure information.
+ *
+ * @property {string} title - Human-readable failure title
+ * @property {Record<string, any>} details - Structured failure details
+ */
+type SoftAssertionFailure = {
+  title: string;
+  details: Record<string, any>;
+};
 
 /**
  * Base class for all API service endpoints.
@@ -47,6 +75,16 @@ export abstract class BaseService {
   protected logger = logger;
 
   /**
+   * Stores soft assertion failures collected during the current test.
+   *
+   * @protected
+   * @type {SoftAssertionFailure[]}
+   * @description Soft assertions log and continue, but keep their failure data here
+   * so tests can decide when to surface them.
+   */
+  protected softAssertionFailures: SoftAssertionFailure[] = [];
+
+  /**
    * Constructor - Initializes BaseService with dependencies
    * 
    * @constructor
@@ -61,6 +99,100 @@ export abstract class BaseService {
   }
 
   /**
+   * Resolve the assertion mode with hard as the default.
+   *
+   * @param options - Optional assertion settings
+   * @returns The resolved assertion mode
+   */
+  protected getAssertionMode(options?: AssertionOptions): AssertionMode {
+    return options?.mode ?? "hard";
+  }
+
+  /**
+   * Record a soft assertion failure for later inspection.
+   *
+   * @param title - Human-readable failure title
+   * @param details - Structured failure details
+   * @returns A promise that resolves after the report attachment is added
+   */
+  protected async recordSoftAssertionFailure(title: string, details: Record<string, any>): Promise<void> {
+    this.softAssertionFailures.push({ title, details });
+    await this.attachFailureDetailsToReport(title, details);
+  }
+
+  /**
+   * Return the collected soft assertion failures for the current service instance.
+   *
+   * @returns A copy of the soft assertion failure list
+   */
+  public getSoftAssertionFailures(): SoftAssertionFailure[] {
+    return [...this.softAssertionFailures];
+  }
+
+  /**
+   * Clear all collected soft assertion failures.
+   *
+   * @returns A promise that resolves once the collector is reset
+   */
+  public async clearSoftAssertionFailures(): Promise<void> {
+    this.softAssertionFailures = [];
+  }
+
+  /**
+   * Fail the current test if any soft assertions were recorded.
+   *
+   * @param title - Optional failure title used in the report
+   * @returns A promise that resolves when the check completes
+   * @throws Error when one or more soft failures exist
+   */
+  public async assertNoSoftAssertionFailures(title: string = "Soft Assertion Failures Detected"): Promise<void> {
+    if (this.softAssertionFailures.length === 0) {
+      return;
+    }
+
+    const details = {
+      "Soft Failure Count": this.softAssertionFailures.length,
+      "Soft Failures": this.softAssertionFailures,
+    };
+
+    await this.attachFailureDetailsToReport(title, details);
+    throw new Error(`${title}: ${this.softAssertionFailures.length}`);
+  }
+
+  /**
+   * Handle a pass or fail result for hard and soft assertion modes.
+   *
+   * @param passed - Whether the assertion passed
+   * @param title - Human-readable assertion title
+   * @param details - Structured failure details
+   * @param options - Optional assertion mode
+   * @returns A promise that resolves when logging/reporting is done
+   * @throws Error when mode is hard and the assertion fails
+   */
+  protected async handleAssertionResult(
+    passed: boolean,
+    title: string,
+    details: Record<string, any>,
+    options?: AssertionOptions
+  ): Promise<void> {
+    if (passed) {
+      return;
+    }
+
+    const mode = this.getAssertionMode(options);
+    this.logger.error(`[Assertion Failure: ${title}]`);
+
+    if (mode === "soft") {
+      this.logger.warn(`Soft assertion failed: ${title}`);
+      await this.recordSoftAssertionFailure(title, details);
+      return;
+    }
+
+    await this.attachFailureDetailsToReport(title, details);
+    throw new Error(title);
+  }
+
+  /**
    * Validates database query results against schema or field value.
    * Returns early if no results (DB disabled or empty result set).
    * 
@@ -69,8 +201,9 @@ export abstract class BaseService {
    * @public
    * 
    * @param {any[]} queryResult - Array of database rows
-   * @param {object | string} schemaOrField - JSON schema object or field path
-   * @param {any} [expectedValue] - Expected value for field validation (optional)
+ * @param {object | string} schemaOrField - JSON schema object or field path
+ * @param {any} [expectedValue] - Expected value for field validation (optional)
+ * @param {AssertionOptions} [options] - Assertion behavior(hard/soft), defaults to hard mode
    * 
    * @returns {Promise<void>} No return value
    * 
@@ -82,22 +215,45 @@ export abstract class BaseService {
    * 2. Field validation: Pass field path string and expectedValue, validates first row
    * Uses Validator static methods for validation.
    */
-  async assertDbQueryResult(queryResult: any[], schemaOrField: object | string, expectedValue?: any): Promise<void> {
+  async assertDbQueryResult(
+    queryResult: any[],
+    schemaOrField: object | string,
+    expectedValue?: any,
+    options?: AssertionOptions
+  ): Promise<void> {
     // Early return if no results (DB disabled or empty)
     if (Array.isArray(queryResult) && queryResult.length === 0) {
       this.logger.warn('DB query returned no results or DB is disabled.');
       return;
     }
 
+    let passed = false;
+    let title = "Database Assertion Failed";
+    let details: Record<string, any> = {};
+
     if (typeof schemaOrField === 'object') {
       // Schema validation mode - uses static Validator method
       const isValid = Validator.validateSchema(schemaOrField, queryResult);
-      expect(isValid).toBe(true);
+      passed = isValid;
+      title = "Database Schema Assertion Failed";
+      details = {
+        "Expected Schema": schemaOrField,
+        "Actual Result": queryResult,
+      };
     } else if (typeof schemaOrField === 'string' && expectedValue !== undefined) {
       // Field validation mode - uses static Validator method
       const isValid = Validator.validateNestedFieldValue(queryResult[0], schemaOrField, expectedValue);
-      expect(isValid).toBe(true);
+      passed = isValid;
+      title = "Database Field Assertion Failed";
+      details = {
+        Field: schemaOrField,
+        Expected: expectedValue,
+        Actual: queryResult?.[0] ? Validator.getNestedValue(queryResult[0], schemaOrField) : undefined,
+        "Full Result": queryResult,
+      };
     }
+
+    await this.handleAssertionResult(passed, title, details, options);
   }
 
   /**
@@ -172,7 +328,8 @@ export abstract class BaseService {
    * @public
    * 
    * @param {APIResponse} response - Playwright APIResponse to validate
-   * @param {number} expectedStatus - Expected HTTP status code (e.g., 200, 404)
+ * @param {number} expectedStatus - Expected HTTP status code (e.g., 200, 404)
+ * @param {AssertionOptions} [options] - Assertion behavior (hard/soft), defaults to hard mode
    * 
    * @returns {Promise<void>} No return value
    * 
@@ -182,28 +339,30 @@ export abstract class BaseService {
    * Public method - accessible from tests.
    * Uses Playwright's expect assertion.
    */
-  async assertStatus(response: APIResponse, expectedStatus: number): Promise<void> {
+  async assertStatus(response: APIResponse, expectedStatus: number, options?: AssertionOptions): Promise<void> {
     const actualStatus = response.status();
     if (actualStatus === expectedStatus) {
       this.logger.info(`Response status ${actualStatus} matches with expected ${expectedStatus}`);
-    } else {
-      this.logger.error(`[Assertion Failure: Api Response Status]`);
-      this.logger.error(`Expected: ${expectedStatus} / Actual: ${actualStatus}`);
-      
-      // Read response body once and pass to reporter
-      try {
-        const responseBody = await response.json().catch(() => response.text().catch(() => "Unable to parse response"));
-        await this.attachFailureDetailsToReport("API Status Assertion Failed", {
-          "Expected Status": expectedStatus,
-          "Actual Status": actualStatus,
-          "Response Headers": response.headers(),
-          "Response Body": responseBody
-        });
-      } catch (error) {
-        this.logger.warn(`Could not read response for reporting: ${error}`);
-      }
     }
-    expect(actualStatus).toBe(expectedStatus);
+
+    let responseBody: any = "Unable to parse response";
+    try {
+      responseBody = await response.json().catch(() => response.text().catch(() => "Unable to parse response"));
+    } catch (error) {
+      this.logger.warn(`Could not read response for reporting: ${error}`);
+    }
+
+    await this.handleAssertionResult(
+      actualStatus === expectedStatus,
+      "API Status Assertion Failed",
+      {
+        "Expected Status": expectedStatus,
+        "Actual Status": actualStatus,
+        "Response Headers": response.headers(),
+        "Response Body": responseBody,
+      },
+      options
+    );
   }
 
   /**
@@ -214,7 +373,8 @@ export abstract class BaseService {
    * @public
    * 
    * @param {APIResponse} response - Playwright APIResponse to validate
-   * @param {object} schema - JSON Schema object (Draft 7 compatible)
+ * @param {object} schema - JSON Schema object (Draft 7 compatible)
+ * @param {AssertionOptions} [options] - Assertion behavior (hard/soft), defaults to hard mode
    * 
    * @returns {Promise<void>} No return value
    * 
@@ -225,7 +385,7 @@ export abstract class BaseService {
    * Parses response as JSON, validates against schema via static Validator.
    * Uses AJV internally for schema validation.
    */
-  async validateSchema(response: APIResponse, schema: object): Promise<void> {
+  async validateSchema(response: APIResponse, schema: object, options?: AssertionOptions): Promise<void> {
     let body: any;
     
     try {
@@ -243,8 +403,11 @@ export abstract class BaseService {
       this.logger.error(`Expected schema: ${JSON.stringify(schema, null, 2)}`);
       this.logger.error(`Actual response: ${JSON.stringify(body, null, 2)}`);
     }
-    
-    expect(isValid).toBe(true);
+
+    await this.handleAssertionResult(isValid, "JSON Schema Validation Failed", {
+      "Expected Schema": schema,
+      "Actual Response": body,
+    }, options);
   }
 
   /**
@@ -255,7 +418,8 @@ export abstract class BaseService {
    * @public
    * 
    * @param {APIResponse} response - Playwright APIResponse to validate
-   * @param {z.ZodTypeAny} zodSchema - Zod schema object
+ * @param {z.ZodTypeAny} zodSchema - Zod schema object
+ * @param {AssertionOptions} [options] - Assertion behavior (hard/soft), defaults to hard mode
    * 
    * @returns {Promise<void>} No return value
    * 
@@ -266,7 +430,7 @@ export abstract class BaseService {
    * Parses response as JSON, validates against Zod schema via static Validator.
    * Provides better TypeScript integration than JSON Schema.
    */
-  async validateZodSchema(response: APIResponse, zodSchema: z.ZodTypeAny): Promise<void> {
+  async validateZodSchema(response: APIResponse, zodSchema: z.ZodTypeAny, options?: AssertionOptions): Promise<void> {
     let responsebody: any;
     
     try {
@@ -282,8 +446,11 @@ export abstract class BaseService {
       this.logger.error(`Zod schema validation failed`);
       this.logger.error(`Response body: ${JSON.stringify(responsebody, null, 2)}`);
     }
-    
-    expect(isValid).toBe(true);
+
+    await this.handleAssertionResult(isValid, "Zod Schema Validation Failed", {
+      "Expected Schema": zodSchema,
+      "Actual Response": responsebody,
+    }, options);
   }
 
   /**
@@ -295,8 +462,9 @@ export abstract class BaseService {
    * @public
    * 
    * @param {APIResponse} response - Playwright APIResponse to validate
-   * @param {string} field - Field path to validate (e.g., "user.email" or "data[0].id")
-   * @param {any} expectedValue - Expected value at the field path
+ * @param {string} field - Field path to validate (e.g., "user.email" or "data[0].id")
+ * @param {any} expectedValue - Expected value at the field path
+ * @param {AssertionOptions} [options] - Assertion behavior (hard/soft), defaults to hard mode
    * 
    * @returns {Promise<void>} No return value
    * 
@@ -309,7 +477,7 @@ export abstract class BaseService {
    * - Plain text/numbers: Uses static Validator.validateFieldValue (string comparison)
    * Logs mismatch details on failure using injected logger.
    */
-  async validateField(response: APIResponse, field: string, expectedValue: any): Promise<void> {
+  async validateField(response: APIResponse, field: string, expectedValue: any, options?: AssertionOptions): Promise<void> {
     let body: any;
     let isMatch = false;
 
@@ -344,8 +512,15 @@ export abstract class BaseService {
         this.logger.error(`[Nested Field] Field validation failed for: ${field}.\n Expected: ${expectedValue} \n Actual: ${actualValue}\n`);
         // this.logger.error(`Full response: ${JSON.stringify(body, null, 2)}`);
       }
-
-      expect(isMatch).toBe(true);
+      
+      await this.handleAssertionResult(isMatch, "Field Validation Failed", {
+        Field: field,
+        Expected: expectedValue,
+        Actual: typeof body === "object" && body !== null
+          ? Validator.getNestedValue(body, field)
+          : String(body).trim(),
+        "Full Response": body,
+      }, options);
 
     } catch (err) {
       this.logger.error(`Field validation error for "${field}": ${err}`);
