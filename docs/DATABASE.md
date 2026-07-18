@@ -20,11 +20,11 @@ Complete guide to database operations and validation in the PlayType framework.
 
 The framework supports database testing with:
 
-- PostgreSQL and MySQL support
+- Named PostgreSQL and MySQL connections
 - SSH tunnel for secure remote connections
 - Direct connection for local databases
 - Query execution with parameterized queries
-- Automatic connection lifecycle management
+- Worker-scoped pool lifecycle management
 - Database result validation
 
 ---
@@ -33,31 +33,39 @@ The framework supports database testing with:
 
 ### Environment Configuration
 
-**PostgreSQL Configuration:**
-```env
-# .env.stage
-
-# Enable/disable database testing
-DB_ENABLED=true
-
-# PostgreSQL settings
-PG_DB_HOST=localhost
-PG_DB_PORT=5432
-PG_DB_NAME=testdb
-DB_USER=postgres
-DB_PASSWORD=your-password
-
-# MySQL settings (if needed)
-MYS_DB_HOST=localhost
-MYS_DB_PORT=3306
-MYS_DB_NAME=testdb
-
-# SSH tunnel settings
-USE_SSH=false
-SSH_HOST=bastion.example.com
-SSH_PORT=22
-SSH_USER=ubuntu
-SSH_KEY_PATH=~/.ssh/id_rsa
+**Named database configuration:**
+Store this object in `DB_CONNECTIONS_JSON` as a single-line JSON string in `.env`, or keep the object shape in runtime config/Consul:
+```json
+{
+  "orders-read": {
+    "type": "postgres",
+    "useSsh": true,
+    "connection": {
+      "host": "orders-db.internal",
+      "port": 5432,
+      "user": "orders_user",
+      "password": "your-password",
+      "name": "orders"
+    },
+    "ssh": {
+      "host": "bastion.example.com",
+      "port": 22,
+      "username": "ubuntu",
+      "privateKeyPath": "~/.ssh/id_rsa"
+    }
+  },
+  "audit-local": {
+    "type": "mysql",
+    "useSsh": false,
+    "connection": {
+      "host": "127.0.0.1",
+      "port": 3306,
+      "user": "audit_user",
+      "password": "your-password",
+      "name": "audit"
+    }
+  }
+}
 ```
 
 ### Configuration in Code
@@ -67,27 +75,26 @@ SSH_KEY_PATH=~/.ssh/id_rsa
 export default {
   db: {
     enabled: process.env.DB_ENABLED === "true",
-    ssh: {
-      useSsh: process.env.USE_SSH === "true",
-      host: process.env.SSH_HOST || "",
-      port: Number(process.env.SSH_PORT) || 22,
-      username: process.env.SSH_USER || "",
-      privateKeyPath: process.env.SSH_KEY_PATH || "",
-    },
-    pgsql: {
-      host: process.env.PG_DB_HOST || "",
-      port: Number(process.env.PG_DB_PORT) || 5432,
-      user: process.env.DB_USER || "",
-      password: process.env.DB_PASSWORD || "",
-      name: process.env.PG_DB_NAME || "",
-    },
-    mysql: {
-      host: process.env.MYS_DB_HOST || "",
-      port: Number(process.env.MYS_DB_PORT) || 3306,
-      user: process.env.DB_USER || "",
-      password: process.env.DB_PASSWORD || "",
-      name: process.env.MYS_DB_NAME || "",
-    },
+    defaultPoolMax: Number(process.env.DB_POOL_MAX) || 10,
+    connections: {
+      "orders-read": {
+        type: "postgres",
+        useSsh: true,
+        connection: {
+          host: "orders-db.internal",
+          port: 5432,
+          user: "orders_user",
+          password: "your-password",
+          name: "orders",
+        },
+        ssh: {
+          host: "bastion.example.com",
+          port: 22,
+          username: "ubuntu",
+          privateKeyPath: "~/.ssh/id_rsa",
+        },
+      }
+    }
   }
 };
 ```
@@ -102,9 +109,9 @@ export default {
 ```typescript
 import { test, expect, BaseTest } from "../../BaseApiTest.js";
 
-test("Query PostgreSQL database", async () => {
-  const results = await BaseTest.dbClient.query(
-    'postgres',
+test("Query PostgreSQL database", async ({ dbClient }) => {
+  const results = await dbClient.query(
+    'orders-read',
     'SELECT * FROM users WHERE email = $1',
     ['test@example.com']
   );
@@ -116,9 +123,9 @@ test("Query PostgreSQL database", async () => {
 
 #### MySQL
 ```typescript
-test("Query MySQL database", async () => {
-  const results = await BaseTest.dbClient.query(
-    'mysql',
+test("Query MySQL database", async ({ dbClient }) => {
+  const results = await dbClient.query(
+    'audit-local',
     'SELECT * FROM users WHERE email = ?',
     ['test@example.com']
   );
@@ -130,15 +137,34 @@ test("Query MySQL database", async () => {
 
 ### Query Method Signature
 ```typescript
-static async query<T = any>(
-  type: 'postgres' | 'mysql',
-  sql: string,
-  params: any[] = []
-): Promise<T[]>
+async query<T = any>(databaseKey: string, sql: string, params: any[] = []): Promise<T[]>
+```
+
+### Fixture Usage
+
+Prefer the injected worker-scoped fixture in test cases:
+
+```typescript
+import { test, expect, BaseTest } from "../../BaseApiTest.js";
+
+test("Verify record using fixture", async ({ rwService, dbClient }) => {
+  const payload = BaseTest.generator.registerUser();
+  const response = await rwService.registerUser(payload);
+  const { email } = (await response.json()).user;
+
+  const results = await dbClient.query(
+    "orders-read",
+    "SELECT * FROM users WHERE email = $1",
+    [email]
+  );
+
+  expect(results.length).toBe(1);
+  expect(results[0].email).toBe(email);
+});
 ```
 
 **Parameters:**
-- `type`: Database type ('postgres' or 'mysql')
+- `databaseKey`: Named database key from `DB_CONNECTIONS_JSON`
 - `sql`: SQL query string with placeholders
 - `params`: Array of parameter values
 
@@ -674,7 +700,7 @@ chmod 600 ~/.ssh/id_rsa
 
 **Solution:**
 ```typescript
-const results = await BaseTest.dbClient.query('postgres', sql, params);
+const results = await BaseTest.dbClient.query('orders-read', sql, params);
 
 if (results.length === 0) {
   BaseTest.logger.warn('No results - is DB enabled?');
@@ -689,16 +715,14 @@ if (results.length === 0) {
 
 **Solution:**
 ```typescript
-// Modify dbClient.ts to add SSL config
+// Add SSL options inside the named database connection if the database needs it.
+const dbConfig = config.db.connections["orders-read"];
 const pgClient = new Client({
-  host: config.db.pgsql.host,
-  port: config.db.pgsql.port,
-  user: config.db.pgsql.user,
-  password: config.db.pgsql.password,
-  database: config.db.pgsql.name,
-  ssl: {
-    rejectUnauthorized: false  // For development
-  }
+  host: dbConfig.connection.host,
+  port: dbConfig.connection.port,
+  user: dbConfig.connection.user,
+  password: dbConfig.connection.password,
+  database: dbConfig.connection.name
 });
 ```
 
@@ -708,8 +732,8 @@ const pgClient = new Client({
 
 | Feature | Usage | Type |
 |---------|-------|------|
-| **Query** | `BaseTest.dbClient.query(type, sql, params)` | PostgreSQL/MySQL |
-| **SSH Tunnel** | `USE_SSH=true` in .env | Secure connection |
+| **Query** | `dbClient.query(databaseKey, sql, params)` | Named PostgreSQL/MySQL |
+| **SSH Tunnel** | `useSsh: true` in a database entry | Secure connection |
 | **Validation** | `rwService.assertDbQueryResult()` | Schema/Field |
 | **Cleanup** | Use `test.afterAll()` | Test isolation |
 

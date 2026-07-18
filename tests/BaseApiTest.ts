@@ -7,6 +7,7 @@ import { logger } from "../src/sharedUtils/logger.js";
 import { Validator } from "../src/api/validator.js";
 import { DataGenerator } from "../src/api/apiUtils/payloadGenerator.js";
 import { realWorldService } from "../src/api/services/realWorld/realWorldEndpoints.js";
+import { FoodApi } from "../src/api/services/realWorld/foodEndpoints.js"
 import config from "../src/sharedUtils/config.js";
 import * as allure from "allure-js-commons";
 
@@ -21,6 +22,14 @@ if(config.useConsul){
 }
 
 /**
+ * Shared database service for the current Playwright worker process.
+ *
+ * This instance is injected through the dbClient fixture and also exposed
+ * through BaseTest.dbClient for backward compatibility.
+ */
+const sharedDbClient = new DatabaseService(envConfig);
+
+/**
  * Options that can be configured per test or test file.
  * 
  * @interface TestOptions
@@ -33,17 +42,48 @@ type TestOptions = {
 };
 
 /**
+ * Build the request headers used for API test contexts.
+ *
+ * @param extraHeaders - Per-test headers supplied via test options
+ * @returns Final merged headers for request.newContext()
+ */
+function buildApiHeaders(extraHeaders: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...extraHeaders,
+  };
+
+  if (config.api_gateway_bearer_token) {
+    headers.Authorization = config.api_gateway_bearer_token;
+  }
+
+  return headers;
+}
+
+/**
  * Fixtures provided to each test.
  * 
  * @interface TestFixtures
  * @property {APIRequestContext} apiContext - Playwright API request context (auto cleanup)
  * @property {ApiClient} apiClient - Custom API client wrapper
  * @property {realWorldService} rwService - RealWorld API service
+ * @property {foodApi} rwService - food API service
+ * @property {DatabaseService} dbClient - Worker-scoped database service
  */
 type TestFixtures = {
   apiContext: APIRequestContext;
   apiClient: ApiClient;
   rwService: realWorldService;
+  foodApi: FoodApi;
+};
+
+/**
+ * Worker-scoped fixtures shared by all tests in a Playwright worker.
+ *
+ * @property {DatabaseService} dbClient - Worker-scoped database service
+ */
+type WorkerFixtures = {
+  dbClient: DatabaseService;
 };
 
 /**
@@ -52,7 +92,7 @@ type TestFixtures = {
  * @description
  * Provides:
  * - TestOptions: Configurable per test/file (baseURL, extraHTTPHeaders)
- * - TestFixtures: Injected dependencies (apiContext, apiClient, rwService)
+ * - TestFixtures: Injected dependencies (apiContext, apiClient, rwService, dbClient)
  * 
  * Usage:
  *   // Override baseURL and headers per test file
@@ -65,7 +105,7 @@ type TestFixtures = {
  *     await rwService.loginUser(payload);
  *   });
  */
-export const test = base.extend<TestOptions & TestFixtures>({
+export const test = base.extend<TestOptions & TestFixtures, WorkerFixtures>({
   /**
    * Configurable base URL for API requests.
    * Can be overridden using test.use() in test files.
@@ -95,7 +135,7 @@ export const test = base.extend<TestOptions & TestFixtures>({
    *     } 
    *   });
    */
-  extraHeaders: [{ "Content-Type": "application/json" }, { option: true }],
+  extraHeaders: [{}, { option: true }],
 
   /**
    * Creates and manages Playwright API request context.
@@ -112,12 +152,13 @@ export const test = base.extend<TestOptions & TestFixtures>({
    */
   apiContext: async ({ baseURL, extraHeaders }, use) => {
     const resolvedBaseURL = baseURL ?? config.api_base_url;
+    const mergedHeaders = buildApiHeaders(extraHeaders);
     BaseTest.logger.info(`Setting up API context for: ${resolvedBaseURL}`);
-    BaseTest.logger.debug(`Headers: ${JSON.stringify(extraHeaders, null, 2)}`);
+    BaseTest.logger.debug(`Headers: ${JSON.stringify(mergedHeaders, null, 2)}`);
 
     const context = await request.newContext({
       baseURL: resolvedBaseURL,
-      extraHTTPHeaders: extraHeaders
+      extraHTTPHeaders: mergedHeaders
     });
 
     await use(context);
@@ -159,6 +200,38 @@ export const test = base.extend<TestOptions & TestFixtures>({
     const service = new realWorldService(apiClient, config.api_base_path);
     await use(service);
   },
+
+    /**
+   * Creates food API service instance.
+   * Depends on apiClient fixture.
+   * 
+   * @fixture rwService
+   * @scope test
+   * 
+   * @param {ApiClient} apiClient - API client from fixture
+   * 
+   * @returns {FoodApi} RealWorld service instance
+   */
+  foodApi: async ({ apiClient }, use) => {
+    const service = new FoodApi(apiClient, config.api_base_path);
+    await use(service);
+  },
+
+  /**
+   * Creates a worker-scoped database client that owns pooled connections.
+   *
+   * The worker fixture initializes all configured pools once, reuses them
+   * for every test in the worker, and closes them after the worker ends.
+   */
+  dbClient: [async ({}, use) => {
+    await sharedDbClient.init();
+
+    try {
+      await use(sharedDbClient);
+    } finally {
+      await sharedDbClient.closeAll();
+    }
+  }, { scope: "worker" }],
 });
 
 export { expect } from "@playwright/test";
@@ -209,7 +282,7 @@ export class BaseTest {
    * @static
    * @description Database operations. Available as BaseTest.dbClient
    */
-  static dbClient = DatabaseService;
+  static dbClient = sharedDbClient;
 
   /**
    * Allure reporting

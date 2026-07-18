@@ -450,30 +450,30 @@ Create `.env.stage` or `.env.prod`:
 # API Configuration
 api_base_url=https://api.realworld.io
 api_base_path=/api
+API_BEARER_TOKEN=your-gateway-bearer-token
 
 # UI Configuration
 dashboard_url=https://app.example.com
 domain=.example.com
 
-# Database (PostgreSQL)
+# Named databases use DB_CONNECTIONS_JSON. Keep the JSON on one line in .env files.
 DB_ENABLED=true
-PG_DB_HOST=localhost
-PG_DB_PORT=5432
-PG_DB_NAME=testdb
-DB_USER=postgres
-DB_PASSWORD=secret
+DB_CONNECTIONS_JSON={"orders-read":{"type":"postgres","useSsh":true,"connection":{"host":"orders-db.internal","port":5432,"user":"orders_user","password":"secret","name":"orders"},"ssh":{"host":"bastion.example.com","port":22,"username":"ubuntu","privateKeyPath":"~/.ssh/id_rsa"}},"audit-local":{"type":"mysql","useSsh":false,"connection":{"host":"127.0.0.1","port":3306,"user":"audit_user","password":"secret","name":"audit"}}}
 
-# Database (MySQL)
-MYS_DB_HOST=localhost
-MYS_DB_PORT=3306
-MYS_DB_NAME=testdb
-
-# SSH Tunnel (optional)
-USE_SSH=false
-SSH_HOST=bastion.example.com
-SSH_PORT=22
-SSH_USER=ubuntu
-SSH_KEY_PATH=~/.ssh/id_rsa
+# Legacy single-db fallback variables are still supported for one PostgreSQL and one MySQL connection.
+# PG_DB_HOST=localhost
+# PG_DB_PORT=5432
+# PG_DB_NAME=testdb
+# DB_USER=postgres
+# DB_PASSWORD=secret
+# MYS_DB_HOST=localhost
+# MYS_DB_PORT=3306
+# MYS_DB_NAME=testdb
+# USE_SSH=false
+# SSH_HOST=bastion.example.com
+# SSH_PORT=22
+# SSH_USER=ubuntu
+# SSH_KEY_PATH=~/.ssh/id_rsa
 
 # Auth (UI Tests)
 AUTH_KEY=authState
@@ -481,6 +481,8 @@ AUTH_TOKEN=your-token-here
 AUTH_USER_EMAIL=test@example.com
 AUTH_USER_NAME=Test User
 ```
+
+When `API_BEARER_TOKEN` is set, `tests/BaseApiTest.ts` adds `Authorization: Bearer <token>` to every API request context automatically. If the token is missing, the header is omitted and requests run without it.
 
 ### Consul Configuration (Optional)
 
@@ -591,16 +593,74 @@ test("GitHub API test", async ({ apiClient }) => {
 
 See [Fixtures Guide](./docs/FIXTURES.md) for complete examples.
 
-### Database Validation
+### Hard vs Soft Assertions
+
+All service assertion helpers now support an optional mode parameter:
+
+- `mode: "hard"` is the default and throws immediately on failure
+- `mode: "soft"` logs the failure, attaches report details, and lets the test continue
+
+Example:
 ```typescript
-test("Verify DB record", async ({ rwService }) => {
+test("Soft validation example", async ({ foodApi }) => {
+  const response = await foodApi.getRestaurantDetails();
+
+  await foodApi.assertStatus(response, 200, { mode: "hard" });
+  await foodApi.validateField(response, "accepting_orders", true, { mode: "soft" });
+  await foodApi.validateSchema(response, someSchema, { mode: "soft" });
+
+  await foodApi.assertNoSoftAssertionFailures("Food flow soft checks failed");
+});
+```
+
+Use soft assertions for secondary checks that should not stop the flow. Use hard assertions for blockers like auth, core response status, and setup steps.
+
+### Database Validation
+Named databases are configured through `DB_CONNECTIONS_JSON`. Each entry needs its own key, database type, and either a direct connection block or SSH block depending on `useSsh`.
+
+Example object shape:
+```json
+{
+  "orders-read": {
+    "type": "postgres",
+    "useSsh": true,
+    "connection": {
+      "host": "orders-db.internal",
+      "port": 5432,
+      "user": "orders_user",
+      "password": "secret",
+      "name": "orders"
+    },
+    "ssh": {
+      "host": "bastion.example.com",
+      "port": 22,
+      "username": "ubuntu",
+      "privateKeyPath": "/home/me/.ssh/id_rsa"
+    }
+  },
+  "audit-local": {
+    "type": "mysql",
+    "useSsh": false,
+    "connection": {
+      "host": "127.0.0.1",
+      "port": 3306,
+      "user": "audit_user",
+      "password": "secret",
+      "name": "audit"
+    }
+  }
+}
+```
+
+```typescript
+test("Verify DB record", async ({ rwService, dbClient }) => {
   // Create via API
   const response = await rwService.registerUser(payload);
   const { email } = (await response.json()).user;
 
-  // Verify in database
-  const dbResults = await BaseTest.dbClient.query(
-    'postgres',
+  // Verify in a named database using the worker-scoped pool
+  const dbResults = await dbClient.query(
+    'orders-read',
     'SELECT * FROM users WHERE email = $1',
     [email]
   );
@@ -609,6 +669,8 @@ test("Verify DB record", async ({ rwService }) => {
   expect(dbResults[0].email).toBe(email);
 });
 ```
+
+The `dbClient` fixture is worker-scoped, so each named database pool is created once per Playwright worker, reused across tests in that worker, and closed automatically during worker teardown.
 
 ### Network Interception (UI)
 ```typescript
@@ -688,4 +750,3 @@ This project is licensed under the MIT License.
 
 
 ---
-
