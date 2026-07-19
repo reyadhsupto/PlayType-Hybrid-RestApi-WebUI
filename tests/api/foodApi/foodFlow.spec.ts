@@ -21,12 +21,5 @@ test.describe.serial( "Call Restauant info and verify if restaurant is accepting
     const results = await dbClient.query('resto',"SELECT accepting_order FROM restaurant_resto WHERE parse_id = 12000156;")
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].accepting_order).toBe(true);
-
-    const results2= await dbClient.query('resto',"SELECT accepting_order FROM restaurant_resto WHERE parse_id = 12000156;")
-
-    const token= await dbClient.query('pathao_api',"SELECT t.*FROM oauth_access_tokens t WHERE session_id IN(SELECT id FROM oauth_sessions s WHERE owner_id IN(SELECT id FROM users WHERE number='01789485376' AND type='user'))ORDER BY updated_at DESC LIMIT 1;")
-
-
-
   });
 });
