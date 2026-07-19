@@ -54,7 +54,10 @@ function buildApiHeaders(extraHeaders: Record<string, string>): Record<string, s
   };
 
   if (config.api_gateway_bearer_token) {
-    headers.Authorization = config.api_gateway_bearer_token;
+    const token = config.api_gateway_bearer_token.trim();
+    headers.Authorization = token.toLowerCase().startsWith("bearer ")
+      ? token
+      : `Bearer ${token}`;
   }
 
   return headers;
@@ -220,12 +223,10 @@ export const test = base.extend<TestOptions & TestFixtures, WorkerFixtures>({
   /**
    * Creates a worker-scoped database client that owns pooled connections.
    *
-   * The worker fixture initializes all configured pools once, reuses them
-   * for every test in the worker, and closes them after the worker ends.
+   * The worker fixture keeps a shared service instance per worker, lazily
+   * opens pools on first use, and closes only active resources on teardown.
    */
   dbClient: [async ({}, use) => {
-    await sharedDbClient.init();
-
     try {
       await use(sharedDbClient);
     } finally {

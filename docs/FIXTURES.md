@@ -19,7 +19,8 @@ Complete guide to using Playwright fixtures in the framework.
 The framework uses Playwright's fixture system for clean dependency management:
 
 - **Fixtures** - Test-specific dependencies (apiContext, apiClient, rwService)
-- **Static Utilities** - Common tools (logger, validator, generator, dbClient) via BaseTest
+- **Static Utilities** - Common tools (logger, validator, generator) via BaseTest
+- **Worker-scoped DB fixture** - `dbClient` for lazy pooled database access
 
 This hybrid approach minimizes boilerplate while providing maximum flexibility.
 
@@ -34,6 +35,7 @@ This hybrid approach minimizes boilerplate while providing maximum flexibility.
 | `apiContext` | `APIRequestContext` | Playwright request context with baseURL | Yes |
 | `apiClient` | `ApiClient` | Custom API client wrapper | Yes |
 | `rwService` | `realWorldService` | RealWorld API service with endpoints | Yes |
+| `dbClient` | `DatabaseService` | Worker-scoped lazy database client | Yes |
 
 ### UI Test Fixtures
 
@@ -49,7 +51,7 @@ This hybrid approach minimizes boilerplate while providing maximum flexibility.
 | `logger` | `BaseTest.logger` | Winston logger |
 | `validator` | `BaseTest.validator` | Response validators |
 | `generator` | `BaseTest.generator` | Test data generators |
-| `dbClient` | `BaseTest.dbClient` | Database client |
+| `dbClient` | `BaseTest.dbClient` | Backward-compatible database client |
 | `config` | `BaseTest.config` | Configuration |
 | `allure` | `BaseTest.allure` | Allure reporting |
 
@@ -63,7 +65,7 @@ import { test, expect, BaseTest } from "../../BaseApiTest.js";
 
 test.describe("User API Tests", () => {
   
-  test("Register user", async ({ rwService }) => {
+  test("Register user", async ({ rwService, dbClient }) => {
     // Use static utilities
     const payload = BaseTest.generator.registerUser();
     BaseTest.logger.info("Registering user...");
@@ -73,6 +75,9 @@ test.describe("User API Tests", () => {
     
     // Assertions
     await rwService.assertStatus(response, 201);
+
+    // Use the worker-scoped DB fixture only when the flow needs it
+    await dbClient.prewarm(["orders-read"]);
   });
 });
 ```

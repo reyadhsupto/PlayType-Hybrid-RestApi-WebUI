@@ -21,10 +21,11 @@ Last updated: 2026-07-18
 
 - Preferred access path: worker-scoped Playwright `dbClient` fixture from `tests/BaseApiTest.ts`
 - Backward-compatible access: `BaseTest.dbClient` still points to the same worker-local service instance
-- Execution model: create pools once per worker process, reuse them across all queries in that worker, close them in worker teardown
+- Execution model: create pools lazily on first use per database key inside each worker, reuse them across all queries in that worker, and close active resources in worker teardown
 - Supported types: PostgreSQL and MySQL
-- Connection registry: named entries from `DB_CONNECTIONS_JSON` or legacy env fallbacks
+- Connection registry: named entries from `DB_CONNECTIONS_JSON`
 - SSH mode: each named database decides independently whether to use SSH and must provide its own SSH config when `useSsh=true`
+- Optional prewarm: `dbClient.prewarm([...keys])` is available when a suite wants a small set of databases ready before the first query
 
 ## Lifecycle Notes
 
@@ -50,7 +51,7 @@ Last updated: 2026-07-18
 ## Current DB Query Pattern
 
 - Query flow: `dbClient.query(databaseKey, sql, params)`
-- Pooling: long-lived worker-local pool
+- Pooling: long-lived worker-local pool created lazily per used database key
 - Cleanup: automatic on worker completion, even when a test fails and the worker stops
 
 ## Environment Snapshot

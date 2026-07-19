@@ -26,7 +26,7 @@ export class DatabaseService {
    * Create a database service instance bound to a resolved framework config.
    *
    * @param runtimeConfig - Framework config for the current worker
-   * @returns A database service ready to initialize pools lazily or eagerly
+   * @returns A database service ready to initialize pools lazily or prewarm selected keys
    */
   constructor(runtimeConfig = config) {
     this.runtimeConfig = runtimeConfig;
@@ -34,17 +34,38 @@ export class DatabaseService {
   }
 
   /**
-   * Initialize all configured database pools for the worker.
+   * Initialize the database service and optionally prewarm selected pools.
    *
-   * @returns A promise that resolves when every configured pool is ready
+   * @param databaseKeys - Optional list of database keys to prewarm
+   * @returns A promise that resolves when the requested pools are ready
    */
-  async init(): Promise<void> {
+  async init(databaseKeys: string[] = []): Promise<void> {
     if (!this.runtimeConfig.db.enabled) {
       logger.warn("Database query is disabled in config");
       return;
     }
 
-    await Promise.all(this.getDatabaseKeys().map((databaseKey) => this.ensurePool(databaseKey)));
+    if (databaseKeys.length === 0) {
+      logger.info("Database service initialized in lazy mode");
+      return;
+    }
+
+    await this.prewarm(databaseKeys);
+  }
+
+  /**
+   * Prewarm a selected set of named database pools.
+   *
+   * @param databaseKeys - Named database keys to initialize ahead of first use
+   * @returns A promise that resolves when the selected pools are ready
+   */
+  async prewarm(databaseKeys: string[]): Promise<void> {
+    if (!this.runtimeConfig.db.enabled) {
+      logger.warn("Database query is disabled in config");
+      return;
+    }
+
+    await Promise.all(databaseKeys.map((databaseKey) => this.ensurePool(databaseKey)));
   }
 
   /**
@@ -97,7 +118,7 @@ export class DatabaseService {
    * @returns A promise that resolves when cleanup finishes
    */
   async closeAll(): Promise<void> {
-    for (const databaseKey of this.getDatabaseKeys()) {
+    for (const databaseKey of this.getActiveDatabaseKeys()) {
       try {
         await this.closeDatabase(databaseKey);
       } catch (error: any) {
@@ -319,6 +340,22 @@ export class DatabaseService {
    */
   private getDatabaseKeys(): string[] {
     return Object.keys(this.databaseConfigs);
+  }
+
+  /**
+   * Return the set of database keys that currently have active resources.
+   *
+   * @returns Database keys with pools, tunnels, SSH clients, or pending init
+   */
+  private getActiveDatabaseKeys(): string[] {
+    return Array.from(
+      new Set([
+        ...this.pools.keys(),
+        ...this.sshClients.keys(),
+        ...this.tunnelServers.keys(),
+        ...this.initPromises.keys(),
+      ])
+    );
   }
 
   /**

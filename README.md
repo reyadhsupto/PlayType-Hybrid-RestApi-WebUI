@@ -460,21 +460,6 @@ domain=.example.com
 DB_ENABLED=true
 DB_CONNECTIONS_JSON={"orders-read":{"type":"postgres","useSsh":true,"connection":{"host":"orders-db.internal","port":5432,"user":"orders_user","password":"secret","name":"orders"},"ssh":{"host":"bastion.example.com","port":22,"username":"ubuntu","privateKeyPath":"~/.ssh/id_rsa"}},"audit-local":{"type":"mysql","useSsh":false,"connection":{"host":"127.0.0.1","port":3306,"user":"audit_user","password":"secret","name":"audit"}}}
 
-# Legacy single-db fallback variables are still supported for one PostgreSQL and one MySQL connection.
-# PG_DB_HOST=localhost
-# PG_DB_PORT=5432
-# PG_DB_NAME=testdb
-# DB_USER=postgres
-# DB_PASSWORD=secret
-# MYS_DB_HOST=localhost
-# MYS_DB_PORT=3306
-# MYS_DB_NAME=testdb
-# USE_SSH=false
-# SSH_HOST=bastion.example.com
-# SSH_PORT=22
-# SSH_USER=ubuntu
-# SSH_KEY_PATH=~/.ssh/id_rsa
-
 # Auth (UI Tests)
 AUTH_KEY=authState
 AUTH_TOKEN=your-token-here
@@ -671,6 +656,7 @@ test("Verify DB record", async ({ rwService, dbClient }) => {
 ```
 
 The `dbClient` fixture is worker-scoped, so each named database pool is created once per Playwright worker, reused across tests in that worker, and closed automatically during worker teardown.
+Pools are opened lazily on first use for a database key. If a suite wants specific databases ready earlier, it can call `dbClient.prewarm(["orders-read", "audit-local"])`.
 
 ### Network Interception (UI)
 ```typescript

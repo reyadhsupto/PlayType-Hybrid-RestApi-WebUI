@@ -372,7 +372,7 @@ test("Upload file", async ({ poManager }) => {
 
 ### Example 1: API to Database Verification
 ```typescript
-test("Verify user in database after registration", async ({ rwService }) => {
+test("Verify user in database after registration", async ({ rwService, dbClient }) => {
   const payload = BaseTest.generator.registerUser();
   const response = await rwService.registerUser(payload);
   
@@ -380,9 +380,11 @@ test("Verify user in database after registration", async ({ rwService }) => {
   
   const { email, username } = (await response.json()).user;
   
+  await dbClient.prewarm(["orders-read"]);
+
   // Query database
-  const dbResults = await BaseTest.dbClient.query(
-    'postgres',
+  const dbResults = await dbClient.query(
+    'orders-read',
     'SELECT * FROM users WHERE email = $1',
     [email]
   );
@@ -399,11 +401,11 @@ test("Verify user in database after registration", async ({ rwService }) => {
 
 ### Example 2: Complex Join Query
 ```typescript
-test("Verify user's articles with tags", async () => {
+test("Verify user's articles with tags", async ({ dbClient }) => {
   const userEmail = "author@example.com";
 
-  const results = await BaseTest.dbClient.query(
-    'postgres',
+  const results = await dbClient.query(
+    'orders-read',
     `SELECT 
        u.email,
        a.slug,
@@ -438,7 +440,7 @@ test.describe("Article Tests with Cleanup", () => {
       const placeholders = createdSlugs.map((_, i) => `$${i + 1}`).join(', ');
       
       await BaseTest.dbClient.query(
-        'postgres',
+        'orders-read',
         `DELETE FROM articles WHERE slug IN (${placeholders})`,
         createdSlugs
       );
@@ -532,10 +534,10 @@ test("Run only in staging environment", async ({ rwService }) => {
   await rwService.assertStatus(response, 200);
 });
 
-test("Skip if database disabled", async ({ rwService }) => {
+test("Skip if database disabled", async ({ rwService, dbClient }) => {
   test.skip(!BaseTest.config.db.enabled, 'Database testing disabled');
   
-  const dbResults = await BaseTest.dbClient.query('postgres', 'SELECT 1', []);
+  const dbResults = await dbClient.query('orders-read', 'SELECT 1', []);
   expect(dbResults.length).toBe(1);
 });
 ```
