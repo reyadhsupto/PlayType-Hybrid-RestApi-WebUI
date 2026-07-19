@@ -140,6 +140,8 @@ test("Query MySQL database", async ({ dbClient }) => {
 async query<T = any>(databaseKey: string, sql: string, params: any[] = []): Promise<T[]>
 ```
 
+The first query for a database key creates that pool lazily inside the current worker. Later queries in the same worker reuse the same pool.
+
 ### Fixture Usage
 
 Prefer the injected worker-scoped fixture in test cases:
@@ -175,6 +177,50 @@ test("Verify record using fixture", async ({ rwService, dbClient }) => {
 - PostgreSQL: `$1, $2, $3...`
 - MySQL: `?, ?, ?...`
 
+### Optional Prewarm
+
+If a suite knows it will use specific databases and wants them ready before the first query, prewarm only those keys:
+
+```typescript
+await dbClient.prewarm(["orders-read", "audit-local"]);
+```
+
+### Worker Lifecycle
+
+Database pools are created per Playwright worker, not globally. Each worker gets its own set of named database pools and SSH tunnels only for the keys that the worker actually uses.
+
+```text
+Playwright Runner
+       |
+       v
+Worker #1 starts ---------------------- Worker #2 starts
+       |                                      |
+       v                                      v
+dbClient fixture init                   dbClient fixture init
+       |                                      |
+       v                                      v
+First query for "orders-read"        First query for "audit-local"
+creates only that pool                creates only that pool
+       |                                      |
+       v                                      v
+Run tests using reused pools          Run tests using reused pools
+within Worker #1                      within Worker #2
+       |                                      |
+       v                                      v
+Worker #1 teardown                    Worker #2 teardown
+       |                                      |
+       v                                      v
+Close pools + SSH tunnels             Close pools + SSH tunnels
+```
+
+Key points:
+
+- Pools are reused within the same worker
+- Pools are not shared across workers
+- Only the database keys that are actually queried get opened
+- If you prewarm only a subset, only that subset is connected early
+- If two workers run the same DB-heavy suite, the setup happens separately per worker for the keys they use
+
 ---
 
 ## SSH Tunneling
@@ -193,12 +239,26 @@ Database Server (PostgreSQL/MySQL)
 ```
 
 ### Configuration
-```env
-USE_SSH=true
-SSH_HOST=bastion.example.com
-SSH_PORT=22
-SSH_USER=ubuntu
-SSH_KEY_PATH=~/.ssh/id_rsa
+```json
+{
+  "orders-read": {
+    "type": "postgres",
+    "useSsh": true,
+    "connection": {
+      "host": "orders-db.internal",
+      "port": 5432,
+      "user": "orders_user",
+      "password": "your-password",
+      "name": "orders"
+    },
+    "ssh": {
+      "host": "bastion.example.com",
+      "port": 22,
+      "username": "ubuntu",
+      "privateKeyPath": "~/.ssh/id_rsa"
+    }
+  }
+}
 ```
 
 ### SSH Key Setup
@@ -220,12 +280,12 @@ ssh -i ~/.ssh/id_rsa ubuntu@bastion.example.com
 
 ### Direct Connection vs SSH Tunnel
 
-**Direct Connection** (USE_SSH=false):
+**Direct Connection** (`useSsh: false` on the named database entry):
 ```
 Your Machine ---> Database Server
 ```
 
-**SSH Tunnel** (USE_SSH=true):
+**SSH Tunnel** (`useSsh: true` on the named database entry):
 ```
 Your Machine ---> SSH Server ---> Database Server
 ```
@@ -258,7 +318,7 @@ test("Verify user created in database", async ({ rwService }) => {
 
   // Verify in database
   const results = await BaseTest.dbClient.query(
-    'postgres',
+    'orders-read',
     'SELECT * FROM users WHERE email = $1',
     [email]
   );
@@ -285,7 +345,7 @@ test("Verify data matches between API and DB", async ({ rwService }) => {
 
   // Query database
   const dbResults = await BaseTest.dbClient.query(
-    'postgres',
+    'orders-read',
     'SELECT * FROM users WHERE email = $1',
     [apiUser.email]
   );
@@ -326,7 +386,7 @@ test("Verify foreign key relationships", async ({ rwService }) => {
 
   // Verify relationship in database
   const results = await BaseTest.dbClient.query(
-    'postgres',
+    'orders-read',
     `SELECT u.email, a.slug, a.title 
      FROM articles a 
      JOIN users u ON a.author_id = u.id 
@@ -347,7 +407,7 @@ test("Verify article count per user", async ({ rwService }) => {
 
   // Query article count
   const results = await BaseTest.dbClient.query(
-    'postgres',
+    'orders-read',
     `SELECT COUNT(*) as article_count 
      FROM articles a 
      JOIN users u ON a.author_id = u.id 
@@ -375,7 +435,7 @@ test("Verify created timestamp", async ({ rwService }) => {
 
   // Query database
   const results = await BaseTest.dbClient.query(
-    'postgres',
+    'orders-read',
     'SELECT created_at FROM users WHERE email = $1',
     [payload.user.email]
   );
@@ -392,7 +452,7 @@ test("Verify created timestamp", async ({ rwService }) => {
 ```typescript
 test("Validate DB results with schema", async ({ rwService }) => {
   const results = await BaseTest.dbClient.query(
-    'postgres',
+    'orders-read',
     'SELECT * FROM users LIMIT 5',
     []
   );
@@ -423,7 +483,7 @@ test("Validate specific field in DB results", async ({ rwService }) => {
   const email = "test@example.com";
   
   const results = await BaseTest.dbClient.query(
-    'postgres',
+    'orders-read',
     'SELECT * FROM users WHERE email = $1',
     [email]
   );
@@ -442,7 +502,7 @@ test("Validate specific field in DB results", async ({ rwService }) => {
 ```typescript
 // Use parameterized queries (prevents SQL injection)
 const results = await BaseTest.dbClient.query(
-  'postgres',
+  'orders-read',
   'SELECT * FROM users WHERE email = $1',
   [email]
 );
@@ -457,16 +517,16 @@ BaseTest.logger.debug(`Query returned ${results.length} rows`);
 expect(apiResponse.email).toBe(dbResult.email);
 
 // Use transactions for data cleanup (if needed)
-await BaseTest.dbClient.query('postgres', 'BEGIN', []);
+await BaseTest.dbClient.query('orders-read', 'BEGIN', []);
 // ... test operations
-await BaseTest.dbClient.query('postgres', 'ROLLBACK', []);
+await BaseTest.dbClient.query('orders-read', 'ROLLBACK', []);
 ```
 
 ### DON'T
 ```typescript
 // Don't use string concatenation (SQL injection risk)
 const results = await BaseTest.dbClient.query(
-  'postgres',
+  'orders-read',
   `SELECT * FROM users WHERE email = '${email}'`,  // DANGEROUS
   []
 );
@@ -505,7 +565,7 @@ test("Verify complete user registration flow", async ({ rwService }) => {
 
   // 3. Verify in database
   const dbResults = await BaseTest.dbClient.query(
-    'postgres',
+    'orders-read',
     'SELECT * FROM users WHERE email = $1',
     [email]
   );
@@ -542,7 +602,7 @@ test.describe("Article Tests with Cleanup", () => {
       const placeholders = createdArticles.map((_, i) => `$${i + 1}`).join(', ');
       
       await BaseTest.dbClient.query(
-        'postgres',
+        'orders-read',
         `DELETE FROM articles WHERE slug IN (${placeholders})`,
         createdArticles
       );
@@ -560,7 +620,7 @@ test.describe("Article Tests with Cleanup", () => {
     
     // Verify in DB
     const results = await BaseTest.dbClient.query(
-      'postgres',
+      'orders-read',
       'SELECT * FROM articles WHERE slug = $1',
       [slug]
     );
@@ -576,7 +636,7 @@ test("Verify user's article with tags", async () => {
   const userEmail = "author@example.com";
 
   const results = await BaseTest.dbClient.query(
-    'postgres',
+    'orders-read',
     `SELECT 
        u.email,
        u.username,
@@ -618,7 +678,7 @@ test("Compare API vs direct DB query performance", async ({ rwService }) => {
   // Time DB query
   const dbStart = Date.now();
   await BaseTest.dbClient.query(
-    'postgres',
+    'orders-read',
     'SELECT * FROM users WHERE email = $1',
     [email]
   );
@@ -636,7 +696,7 @@ test("Compare API vs direct DB query performance", async ({ rwService }) => {
 test("Verify data migration completed", async () => {
   // Check old table is empty
   const oldResults = await BaseTest.dbClient.query(
-    'postgres',
+    'orders-read',
     'SELECT COUNT(*) as count FROM old_users',
     []
   );
@@ -645,7 +705,7 @@ test("Verify data migration completed", async () => {
 
   // Check new table has data
   const newResults = await BaseTest.dbClient.query(
-    'postgres',
+    'orders-read',
     'SELECT COUNT(*) as count FROM users',
     []
   );

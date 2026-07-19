@@ -22,7 +22,7 @@ The framework supports multiple configuration sources:
 - .env files for different environments (stage, prod)
 - Consul for centralized configuration
 - Runtime config overrides
-- Environment variable fallbacks
+- Named database JSON config
 
 ---
 
@@ -83,30 +83,10 @@ AUTH_FAMILY_NAME=User
 AUTH_USER_PIC=https://example.com/avatar.jpg
 
 # ==================================
-# Database - PostgreSQL
+# Database - Named Connections
 # ==================================
 DB_ENABLED=true
-PG_DB_HOST=localhost
-PG_DB_PORT=5432
-PG_DB_NAME=testdb
-DB_USER=postgres
-DB_PASSWORD=your-password
-
-# ==================================
-# Database - MySQL
-# ==================================
-MYS_DB_HOST=localhost
-MYS_DB_PORT=3306
-MYS_DB_NAME=testdb
-
-# ==================================
-# SSH Tunnel (Database)
-# ==================================
-USE_SSH=false
-SSH_HOST=bastion.example.com
-SSH_PORT=22
-SSH_USER=ubuntu
-SSH_KEY_PATH=~/.ssh/id_rsa
+DB_CONNECTIONS_JSON={"orders-read":{"type":"postgres","useSsh":true,"connection":{"host":"orders-db.internal","port":5432,"user":"orders_user","password":"your-password","name":"orders"},"ssh":{"host":"bastion.example.com","port":22,"username":"ubuntu","privateKeyPath":"~/.ssh/id_rsa"}},"audit-local":{"type":"mysql","useSsh":false,"connection":{"host":"127.0.0.1","port":3306,"user":"audit_user","password":"your-password","name":"audit"}}}
 
 # ==================================
 # Consul (Optional)
@@ -180,26 +160,26 @@ const config = {
   // Database
   db: {
     enabled: process.env.DB_ENABLED === "true",
-    ssh: {
-      useSsh: process.env.USE_SSH === "true",
-      host: process.env.SSH_HOST || "",
-      port: Number(process.env.SSH_PORT) || 22,
-      username: process.env.SSH_USER || "",
-      privateKeyPath: process.env.SSH_KEY_PATH || "",
-    },
-    pgsql: {
-      host: process.env.PG_DB_HOST || "",
-      port: Number(process.env.PG_DB_PORT) || 5432,
-      user: process.env.DB_USER || "",
-      password: process.env.DB_PASSWORD || "",
-      name: process.env.PG_DB_NAME || "",
-    },
-    mysql: {
-      host: process.env.MYS_DB_HOST || "",
-      port: Number(process.env.MYS_DB_PORT) || 3306,
-      user: process.env.DB_USER || "",
-      password: process.env.DB_PASSWORD || "",
-      name: process.env.MYS_DB_NAME || "",
+    defaultPoolMax: 10,
+    connections: {
+      "orders-read": {
+        type: "postgres",
+        useSsh: true,
+        connection: {
+          host: "orders-db.internal",
+          port: 5432,
+          user: "orders_user",
+          password: "your-password",
+          name: "orders",
+        },
+        ssh: {
+          useSsh: true,
+          host: "bastion.example.com",
+          port: 22,
+          username: "ubuntu",
+          privateKeyPath: "~/.ssh/id_rsa",
+        },
+      }
     },
   },
 
@@ -360,17 +340,15 @@ if (config.useConsul) {
 api_base_url=https://api.staging.example.com
 dashboard_url=https://app.staging.example.com
 DB_ENABLED=true
-PG_DB_HOST=staging-db.example.com
-USE_SSH=true
+DB_CONNECTIONS_JSON={"orders-read":{"type":"postgres","useSsh":true,"connection":{"host":"staging-db.example.com","port":5432,"user":"postgres","password":"secret","name":"orders"},"ssh":{"host":"bastion.example.com","port":22,"username":"ubuntu","privateKeyPath":"~/.ssh/id_rsa"}}}
 ```
 
 **Production Environment (.env.prod):**
 ```env
 api_base_url=https://api.example.com
 dashboard_url=https://app.example.com
-DB_ENABLED=false  # Don't write to prod DB
-PG_DB_HOST=prod-db.example.com
-USE_SSH=true
+DB_ENABLED=false
+DB_CONNECTIONS_JSON={"orders-read":{"type":"postgres","useSsh":true,"connection":{"host":"prod-db.example.com","port":5432,"user":"postgres","password":"secret","name":"orders"},"ssh":{"host":"bastion.example.com","port":22,"username":"ubuntu","privateKeyPath":"~/.ssh/id_rsa"}}}
 ```
 
 **Local Development (.env.local):**
@@ -378,8 +356,7 @@ USE_SSH=true
 api_base_url=http://localhost:3000
 dashboard_url=http://localhost:8080
 DB_ENABLED=true
-PG_DB_HOST=localhost
-USE_SSH=false
+DB_CONNECTIONS_JSON={"orders-read":{"type":"postgres","useSsh":false,"connection":{"host":"localhost","port":5432,"user":"postgres","password":"secret","name":"orders"}}}
 ```
 
 ### Conditional Logic Based on Environment
@@ -464,8 +441,8 @@ if (!config.api_base_url) {
   throw new Error('api_base_url is required');
 }
 
-// Use type-safe access
-const port: number = config.db.pgsql.port;
+// Use type-safe access for named databases
+const port: number = config.db.connections["orders-read"].connection.port;
 
 // Document config options
 /**

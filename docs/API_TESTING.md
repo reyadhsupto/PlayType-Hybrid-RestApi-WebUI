@@ -381,11 +381,7 @@ await rwService.validateZodSchema(response, userSchemaZod);
 ```env
 # .env.stage
 DB_ENABLED=true
-PG_DB_HOST=localhost
-PG_DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=secret
-PG_DB_NAME=testdb
+DB_CONNECTIONS_JSON={"orders-read":{"type":"postgres","useSsh":false,"connection":{"host":"localhost","port":5432,"user":"postgres","password":"secret","name":"testdb"}}}
 ```
 
 ### Query Database
@@ -399,7 +395,7 @@ test("Verify user in database", async ({ rwService }) => {
 
   // Query database
   const dbResults = await BaseTest.dbClient.query(
-    'postgres',
+    'orders-read',
     'SELECT * FROM users WHERE email = $1',
     [email]
   );
@@ -415,7 +411,7 @@ test("Verify user in database", async ({ rwService }) => {
 
 **Schema validation**:
 ```typescript
-const dbResults = await BaseTest.dbClient.query('postgres', sql, params);
+const dbResults = await BaseTest.dbClient.query('orders-read', sql, params);
 
 await rwService.assertDbQueryResult(dbResults, {
   type: "array",
@@ -438,7 +434,7 @@ await rwService.assertDbQueryResult(dbResults, "status", "active");
 ### MySQL Support
 ```typescript
 const mysqlResults = await BaseTest.dbClient.query(
-  'mysql',
+  'audit-local',
   'SELECT * FROM users WHERE email = ?',
   [email]
 );
@@ -529,7 +525,7 @@ test.describe("User Registration and Login Flow", () => {
     
     // Verify in database
     const dbResults = await BaseTest.dbClient.query(
-      'postgres',
+      'orders-read',
       'SELECT * FROM users WHERE email = $1',
       [userEmail]
     );
@@ -694,7 +690,7 @@ await rwService.validateField(response, "user.email", email);  // Check nesting
 ```env
 # Check .env.stage
 DB_ENABLED=true
-USE_SSH=false  # Or true if using SSH
+DB_CONNECTIONS_JSON={"orders-read":{"type":"postgres","useSsh":false,"connection":{"host":"localhost","port":5432,"user":"postgres","password":"secret","name":"testdb"}}}
 ```
 
 ---

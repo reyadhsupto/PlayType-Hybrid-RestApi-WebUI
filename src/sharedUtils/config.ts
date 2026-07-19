@@ -125,60 +125,20 @@ function normalizeDatabaseConfig(key: string, rawConfig: any): NamedDatabaseConf
 }
 
 /**
- * Build a named database map from modern JSON config if available.
+ * Build a named database map from JSON config if available.
  *
  * @returns A map of named database configurations
  */
 function loadNamedDatabases(): Record<string, NamedDatabaseConfig> {
   const rawConnections = parseJsonEnv<Record<string, any>>(process.env.DB_CONNECTIONS_JSON, "DB_CONNECTIONS_JSON");
-  if (rawConnections && Object.keys(rawConnections).length > 0) {
-    const connections: Record<string, NamedDatabaseConfig> = {};
+  const connections: Record<string, NamedDatabaseConfig> = {};
 
-    for (const [key, value] of Object.entries(rawConnections)) {
-      connections[key] = normalizeDatabaseConfig(key, value);
-    }
-
+  if (!rawConnections || Object.keys(rawConnections).length === 0) {
     return connections;
   }
 
-  const connections: Record<string, NamedDatabaseConfig> = {};
-  const legacySsh = {
-    useSsh: process.env.USE_SSH === "true",
-    host: process.env.SSH_HOST || "",
-    port: Number(process.env.SSH_PORT) || 22,
-    username: process.env.SSH_USER || "",
-    privateKeyPath: process.env.SSH_KEY_PATH || "",
-    password: process.env.SSH_PASSWORD || "",
-  };
-
-  if (process.env.PG_DB_HOST || process.env.PG_DB_NAME) {
-    connections.postgres = normalizeDatabaseConfig("postgres", {
-      type: "postgres",
-      useSsh: legacySsh.useSsh,
-      ssh: legacySsh,
-      connection: {
-        host: process.env.PG_DB_HOST || process.env.DB_HOST || "",
-        port: Number(process.env.PG_DB_PORT || process.env.DB_PORT) || 5432,
-        user: process.env.PG_DB_USER || process.env.DB_USER || "",
-        password: process.env.PG_DB_PASSWORD || process.env.DB_PASSWORD || "",
-        name: process.env.PG_DB_NAME || process.env.DB_NAME || "",
-      },
-    });
-  }
-
-  if (process.env.MYS_DB_HOST || process.env.MYS_DB_NAME) {
-    connections.mysql = normalizeDatabaseConfig("mysql", {
-      type: "mysql",
-      useSsh: legacySsh.useSsh,
-      ssh: legacySsh,
-      connection: {
-        host: process.env.MYS_DB_HOST || "",
-        port: Number(process.env.MYS_DB_PORT) || 3306,
-        user: process.env.MYS_DB_USER || process.env.DB_USER || "",
-        password: process.env.MYS_DB_PASSWORD || process.env.DB_PASSWORD || "",
-        name: process.env.MYS_DB_NAME || "",
-      },
-    });
+  for (const [key, value] of Object.entries(rawConnections)) {
+    connections[key] = normalizeDatabaseConfig(key, value);
   }
 
   return connections;
