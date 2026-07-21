@@ -28,6 +28,7 @@ A production-ready hybrid test automation framework built with **Playwright** an
 - **Dual API client modes** - Structured (with baseURL) + Direct (full URL) calls
 - **Response validation** - JSON Schema (AJV) + Zod with TypeScript integration
 - **Database verification** - PostgreSQL & MySQL with SSH tunnel support
+- **Polling utilities** - Reusable waits for response status and field values
 - **Dynamic data generation** - Faker.js integration for realistic test data
 - **Request/response logging** - Winston logger with file rotation
 - **Fixture-based architecture** - Clean dependency injection
@@ -210,6 +211,7 @@ playtype-hybrid-framework/
 │   ├── UI_TESTING.md
 │   ├── FIXTURES.md
 │   ├── DATABASE.md
+│   ├── POLLING.md
 │   └── EXAMPLES.md
 ├── 📄 .env.stage                         # Stage environment config
 ├── 📄 .env.prod                          # Production environment config
@@ -271,6 +273,7 @@ Comprehensive guides available in `/docs`:
 | **[UI Testing Guide](./docs/UI_TESTING.md)** | Page objects, auth setup, UI fixtures |
 | **[Fixtures Guide](./docs/FIXTURES.md)** | Fixture usage, `test.use()` overrides, examples |
 | **[Database Testing](./docs/DATABASE.md)** | DB queries, SSH tunneling, validation |
+| **[Polling Guide](./docs/POLLING.md)** | Reusable polling helper, status checks, field checks |
 | **[Configuration Guide](./docs/CONFIGURATION.md)** | Environment setup, Consul, multi-env |
 | **[Utilities Reference](./docs/UTILITIES.md)** | Logger, data generator, validators |
 | **[Examples](./docs/EXAMPLES.md)** | Common testing patterns and recipes |
@@ -730,6 +733,7 @@ This project is licensed under the MIT License.
 - [UI Testing Guide](./docs/UI_TESTING.md)
 - [Fixtures Reference](./docs/FIXTURES.md)
 - [Database Guide](./docs/DATABASE.md)
+- [Polling Guide](./docs/POLLING.md)
 - [Examples](./docs/EXAMPLES.md)
 - [Makefile Commands](./docs/MAKEFILE.md)
 

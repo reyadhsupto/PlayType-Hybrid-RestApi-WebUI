@@ -1,6 +1,6 @@
 # Agent Context
 
-Last updated: 2026-07-18
+Last updated: 2026-07-21
 
 ## Project Snapshot
 
@@ -13,7 +13,7 @@ Last updated: 2026-07-18
 
 - `src/api/` - API client, validation, service layer, payload helpers
 - `src/ui/` - Page objects, shared UI actions, auth helpers, page object manager
-- `src/sharedUtils/` - config, logger, database client, data generation, reporting helpers
+- `src/sharedUtils/` - config, logger, database client, polling, data generation, reporting helpers
 - `tests/` - Playwright test bases plus API/UI specs
 - `fixtures/` - Playwright global setup and teardown
 
@@ -27,6 +27,15 @@ Last updated: 2026-07-18
 - SSH mode: each named database decides independently whether to use SSH and must provide its own SSH config when `useSsh=true`
 - Optional prewarm: `dbClient.prewarm([...keys])` is available when a suite wants a small set of databases ready before the first query
 
+## Polling Design
+
+- Preferred access path: import `recurse`, `waitForResponseStatus`, or `waitForResponseFieldValue` from `src/sharedUtils/recurse.ts`
+- Fixture access: `polling` fixture is available from `tests/BaseApiTest.ts`
+- Static access: `BaseTest.polling` points to the shared helper bundle
+- Execution model: command is repeated on every interval until the expected status or field value matches
+- Logging: every attempt can log the current value, elapsed time, timeout, and last error
+- Use cases: ride dispatch, driver acceptance, ride completion, payment settlement, wallet balance, and due amount updates
+
 ## Lifecycle Notes
 
 - `globalSetup` remains responsible for file-based bootstrap only
@@ -36,16 +45,19 @@ Last updated: 2026-07-18
 ## Important Files
 
 - `tests/BaseApiTest.ts` - API test fixtures and shared worker-scoped DB client
+- `src/sharedUtils/recurse.ts` - polling helper implementation and helper bundle
 - `src/sharedUtils/dbClient.ts` - pooled database client implementation
 - `fixtures/global-setup.ts` - runtime config bootstrap
 - `fixtures/global-teardown.ts` - runtime config cleanup and log footer
 - `README.md` - user-facing DB example and framework overview
+- `docs/POLLING.md` - polling helper documentation and examples
 
 ## Working Conventions
 
 - Keep comments and JSDoc close to public methods and fixtures
 - Prefer dependency injection through Playwright fixtures when adding shared test resources
 - Avoid creating cross-process state in `globalSetup`
+- Prefer polling helpers over ad hoc retry loops for eventual consistency checks
 - Update this file whenever a major architectural decision changes
 
 ## Current DB Query Pattern

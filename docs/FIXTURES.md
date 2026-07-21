@@ -21,6 +21,7 @@ The framework uses Playwright's fixture system for clean dependency management:
 - **Fixtures** - Test-specific dependencies (apiContext, apiClient, rwService)
 - **Static Utilities** - Common tools (logger, validator, generator) via BaseTest
 - **Worker-scoped DB fixture** - `dbClient` for lazy pooled database access
+- **Polling helpers** - `polling` for reusable eventual consistency checks
 
 This hybrid approach minimizes boilerplate while providing maximum flexibility.
 
@@ -36,6 +37,7 @@ This hybrid approach minimizes boilerplate while providing maximum flexibility.
 | `apiClient` | `ApiClient` | Custom API client wrapper | Yes |
 | `rwService` | `realWorldService` | RealWorld API service with endpoints | Yes |
 | `dbClient` | `DatabaseService` | Worker-scoped lazy database client | Yes |
+| `polling` | `PollingHelpers` | Reusable polling helper bundle | Yes |
 
 ### UI Test Fixtures
 
@@ -52,6 +54,7 @@ This hybrid approach minimizes boilerplate while providing maximum flexibility.
 | `validator` | `BaseTest.validator` | Response validators |
 | `generator` | `BaseTest.generator` | Test data generators |
 | `dbClient` | `BaseTest.dbClient` | Backward-compatible database client |
+| `polling` | `BaseTest.polling` | Reusable polling helper bundle |
 | `config` | `BaseTest.config` | Configuration |
 | `allure` | `BaseTest.allure` | Allure reporting |
 
@@ -65,7 +68,7 @@ import { test, expect, BaseTest } from "../../BaseApiTest.js";
 
 test.describe("User API Tests", () => {
   
-  test("Register user", async ({ rwService, dbClient }) => {
+  test("Register user", async ({ rwService, apiClient, dbClient, polling }) => {
     // Use static utilities
     const payload = BaseTest.generator.registerUser();
     BaseTest.logger.info("Registering user...");
@@ -78,6 +81,16 @@ test.describe("User API Tests", () => {
 
     // Use the worker-scoped DB fixture only when the flow needs it
     await dbClient.prewarm(["orders-read"]);
+
+    // Wait for a delayed state transition
+    await polling.waitForResponseStatus(
+      () => apiClient.callApi({
+        path_param: "/health",
+        method: "GET"
+      }),
+      201,
+      { message: "Waiting for health endpoint to become ready", timeoutMs: 30000, intervalMs: 1000 }
+    );
   });
 });
 ```
