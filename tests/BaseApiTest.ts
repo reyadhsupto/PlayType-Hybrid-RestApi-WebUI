@@ -3,6 +3,7 @@
 import { test as base, request, APIRequestContext } from "@playwright/test";
 import { ApiClient } from "../src/api/client.js";
 import { DatabaseService } from "../src/sharedUtils/dbClient.js";
+import { polling as pollingHelpers, type PollingHelpers } from "../src/sharedUtils/recurse.js";
 import { logger } from "../src/sharedUtils/logger.js";
 import { Validator } from "../src/api/validator.js";
 import { DataGenerator } from "../src/api/apiUtils/payloadGenerator.js";
@@ -72,12 +73,14 @@ function buildApiHeaders(extraHeaders: Record<string, string>): Record<string, s
  * @property {realWorldService} rwService - RealWorld API service
  * @property {foodApi} rwService - food API service
  * @property {DatabaseService} dbClient - Worker-scoped database service
+ * @property {PollingHelpers} polling - Polling helpers for async checks
  */
 type TestFixtures = {
   apiContext: APIRequestContext;
   apiClient: ApiClient;
   rwService: realWorldService;
   foodApi: FoodApi;
+  polling: PollingHelpers;
 };
 
 /**
@@ -221,6 +224,16 @@ export const test = base.extend<TestOptions & TestFixtures, WorkerFixtures>({
   },
 
   /**
+   * Provides reusable polling helpers for asynchronous state checks.
+   *
+   * The helper is stateless, so the same implementation can be shared
+   * across all tests in the worker.
+   */
+  polling: async ({}, use) => {
+    await use(pollingHelpers);
+  },
+
+  /**
    * Creates a worker-scoped database client that owns pooled connections.
    *
    * The worker fixture keeps a shared service instance per worker, lazily
@@ -246,6 +259,7 @@ export { expect } from "@playwright/test";
  * - validator: Response validation utilities
  * - generator: Test data generation
  * - dbClient: Database operations
+ * - polling: Polling utilities for eventual consistency checks
  * - config: Environment configuration
  * - allure: Test reporting
  */
@@ -284,6 +298,13 @@ export class BaseTest {
    * @description Database operations. Available as BaseTest.dbClient
    */
   static dbClient = sharedDbClient;
+
+  /**
+   * Polling helper bundle
+   * @static
+   * @description Polling utilities available as BaseTest.polling
+   */
+  static polling = pollingHelpers;
 
   /**
    * Allure reporting
