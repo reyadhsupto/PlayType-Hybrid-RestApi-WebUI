@@ -18,7 +18,7 @@ Complete guide to using Playwright fixtures in the framework.
 
 The framework uses Playwright's fixture system for clean dependency management:
 
-- **Fixtures** - Test-specific dependencies (apiContext, apiClient, rwService)
+- **Fixtures** - Core API plumbing (`apiContext`, `apiClient`, `dbClient`, `polling`) plus repo-specific sample services (`rwService`, `foodApi`)
 - **Static Utilities** - Common tools (logger, validator, generator) via BaseTest
 - **Worker-scoped DB fixture** - `dbClient` for lazy pooled database access
 - **Polling helpers** - `polling` for reusable eventual consistency checks
@@ -33,9 +33,16 @@ This hybrid approach minimizes boilerplate while providing maximum flexibility.
 
 | Fixture | Type | Description | Auto Cleanup |
 |---------|------|-------------|--------------|
-| `apiContext` | `APIRequestContext` | Playwright request context with baseURL | Yes |
+| `apiContext` | `APIRequestContext` | Playwright request context with `baseURL` and merged headers | Yes |
 | `apiClient` | `ApiClient` | Custom API client wrapper | Yes |
+| `userApiContext` | `APIRequestContext` | User service request context | Yes |
+| `restoApiContext` | `APIRequestContext` | Resto service request context | Yes |
+| `driverApiContext` | `APIRequestContext` | Driver service request context | Yes |
+| `userApiClient` | `ApiClient` | User service client wrapper | Yes |
+| `restoApiClient` | `ApiClient` | Resto service client wrapper | Yes |
+| `driverApiClient` | `ApiClient` | Driver service client wrapper | Yes |
 | `rwService` | `realWorldService` | RealWorld API service with endpoints | Yes |
+| `foodApi` | `FoodApi` | Food API sample service with endpoints | Yes |
 | `dbClient` | `DatabaseService` | Worker-scoped lazy database client | Yes |
 | `polling` | `PollingHelpers` | Reusable polling helper bundle | Yes |
 
@@ -57,6 +64,8 @@ This hybrid approach minimizes boilerplate while providing maximum flexibility.
 | `polling` | `BaseTest.polling` | Reusable polling helper bundle |
 | `config` | `BaseTest.config` | Configuration |
 | `allure` | `BaseTest.allure` | Allure reporting |
+
+`BaseApiTest.ts` now standardizes on Playwright's `baseURL` and `extraHTTPHeaders` options. The sample service fixtures in this repo are built on top of that shared context layer and can be removed in a new project without affecting the core framework helpers.
 
 ---
 

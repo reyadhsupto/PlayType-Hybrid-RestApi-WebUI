@@ -64,6 +64,31 @@ export class FoodApi extends BaseService {
   }
 
   /**
+   * Fetches the detailed definition for one menu item.
+   *
+   * This endpoint is useful when the item has addons and the test needs
+   * the addon group ids before building a calculate bill payload.
+   *
+   * @method getRestaurantItemDetails
+   * @async
+   * @public
+   *
+   * @param {string} itemId - Menu item id to fetch
+   * @returns {Promise<APIResponse>} Response with the item detail payload
+   */
+  @step('Call Restaurant Item Details by id api')
+  async getRestaurantItemDetails(itemId: string): Promise<APIResponse> {
+    return this.callApi({
+      method: "GET",
+      path_param: `items/${itemId}`,
+      headers: {
+        city_id: "1",
+        country_id: "1",
+      },
+    });
+  }
+
+  /**
    * Authenticates user and returns token.
    * 
    * @method loginUser

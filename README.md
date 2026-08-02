@@ -26,6 +26,7 @@ A production-ready hybrid test automation framework built with **Playwright** an
 
 ### API Testing
 - **Dual API client modes** - Structured (with baseURL) + Direct (full URL) calls
+- **Standardized API fixtures** - `baseURL` and `extraHTTPHeaders` drive request context setup
 - **Response validation** - JSON Schema (AJV) + Zod with TypeScript integration
 - **Database verification** - PostgreSQL & MySQL with SSH tunnel support
 - **Polling utilities** - Reusable waits for response status and field values
@@ -64,7 +65,7 @@ A production-ready hybrid test automation framework built with **Playwright** an
                              ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Playwright Fixtures                          │
-│        (apiContext, apiClient, rwService, poManager)            │
+│   (apiContext, apiClient, dbClient, polling, sample services)   │
 └────────────────────────────┬────────────────────────────────────┘
                              │
                 ┌────────────┴────────────┐
