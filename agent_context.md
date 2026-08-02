@@ -1,6 +1,6 @@
 # Agent Context
 
-Last updated: 2026-07-21
+Last updated: 2026-08-02
 
 ## Project Snapshot
 
@@ -8,6 +8,7 @@ Last updated: 2026-07-21
 - Coverage: REST API and Web UI tests
 - Key utilities: logging, validation, data generation, database checks, Allure reporting
 - Config source: `.env.*` files and optional Consul runtime merge
+- API fixtures now standardize on Playwright's `baseURL` and `extraHTTPHeaders` options
 
 ## Current Structure
 
@@ -34,6 +35,7 @@ Last updated: 2026-07-21
 - Static access: `BaseTest.polling` points to the shared helper bundle
 - Execution model: command is repeated on every interval until the expected status or field value matches
 - Logging: every attempt can log the current value, elapsed time, timeout, and last error
+- Shared helpers also expose `getNestedValue` for dot/bracket path lookup inside response bodies
 - Use cases: ride dispatch, driver acceptance, ride completion, payment settlement, wallet balance, and due amount updates
 
 ## Lifecycle Notes
@@ -44,7 +46,7 @@ Last updated: 2026-07-21
 
 ## Important Files
 
-- `tests/BaseApiTest.ts` - API test fixtures and shared worker-scoped DB client
+- `tests/BaseApiTest.ts` - Core API fixtures, sample service fixtures, and shared worker-scoped DB client
 - `src/sharedUtils/recurse.ts` - polling helper implementation and helper bundle
 - `src/sharedUtils/dbClient.ts` - pooled database client implementation
 - `fixtures/global-setup.ts` - runtime config bootstrap
@@ -82,6 +84,22 @@ Last updated: 2026-07-21
 ## API Auth Pattern
 
 - API request contexts use a static bearer token from `API_BEARER_TOKEN` or `API_GATEWAY_BEARER_TOKEN`
-- The token is injected into `extraHTTPHeaders` only when present
+- The token is injected into `extraHTTPHeaders` only when present and does not overwrite an explicit test-level `Authorization`
 - If the token is missing, API requests still run without an Authorization header
 - UI auth continues to use the separate `AUTH_TOKEN` state for browser tests
+
+## Multi Service API Base URLs
+
+- Environment variables now include `user_api_base_url`, `resto_api_base_url`, and `driver_api_base_url`
+- `src/sharedUtils/config.ts` exposes them under `config.api_base_urls`
+- Legacy `api_base_url` remains the fallback for backward compatibility
+- `tests/BaseApiTest.ts` now exposes `userApiContext`, `restoApiContext`, `driverApiContext`, and matching client fixtures for service-specific flows
+
+## Calculate Bill Payload Builder
+
+- `DataGenerator.buildCalculateBillPayload(...)` now accepts the full restaurant item list response
+- The default flow selects up to 3 items that do not have addons
+- Quantities are randomized between 1 and 3 per selected item
+- If fewer than 3 no addon items are available, the payload uses the smaller set
+- Addon fallback is optional and requires `fetchItemDetails` plus `allowAddonFallback=true`
+- `FoodApi.getRestaurantItemDetails(itemId)` exists for addon aware item resolution

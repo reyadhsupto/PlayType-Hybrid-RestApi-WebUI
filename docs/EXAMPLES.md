@@ -15,6 +15,30 @@ Comprehensive collection of common testing patterns and real-world examples.
 
 ## API Testing Examples
 
+### Example 0: Build Calculate Bill Payload From Restaurant Items
+```typescript
+import { test, expect, BaseTest } from "../../BaseApiTest.js";
+
+test("build calculate bill payload from restaurant response", async ({ foodApi }) => {
+  const restaurantResponse = await foodApi.getRestaurantDetails();
+  const restaurantBody = await restaurantResponse.json();
+
+  const payload = await BaseTest.generator.buildCalculateBillPayload({
+    restaurantItemsResponse: restaurantBody,
+    city: 1,
+    deliveryMode: "HOME_DELIVERY",
+    isPriorityDelivery: false,
+    dropOffLat: 23.7935486,
+    dropOffLon: 90.4111422,
+    promoCode: "",
+    restaurant: "13142151-76df-4d12-ba5b-25603c450c2e",
+  });
+
+  expect(payload.items.length).toBeLessThanOrEqual(3);
+  expect(payload.items.every((item) => item.quantity >= 1 && item.quantity <= 3)).toBeTruthy();
+});
+```
+
 ### Example 1: Complete CRUD Operations
 ```typescript
 import { test, expect, BaseTest } from "../../BaseApiTest.js";

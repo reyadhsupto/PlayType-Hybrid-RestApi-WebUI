@@ -234,7 +234,16 @@ export async function recurse<T>(
 }
 
 /**
- * Wait until an API response reaches the expected HTTP status.
+ * Wait until a command returns a response with the expected HTTP status.
+ *
+ * Example:
+ * ```ts
+ * const response = await waitForResponseStatus(
+ *   () => restoApi.getOrderDetails(orderId),
+ *   200,
+ *   { timeoutMs: 10_000, intervalMs: 1_000 }
+ * );
+ * ```
  *
  * @typeParam T - Response type with a status() method
  * @param command - Async function that returns the response to inspect
@@ -272,6 +281,16 @@ export async function waitForResponseStatus<T extends { status: () => number }>(
 /**
  * Wait until a nested field reaches the expected value.
  *
+ * Example:
+ * ```ts
+ * const body = await waitForResponseFieldValue(
+ *   () => userApi.getOrderDetails(orderId).then((response) => response.json()),
+ *   "order.status",
+ *   "HANDOVER",
+ *   { timeoutMs: 10_000, intervalMs: 1_000 }
+ * );
+ * ```
+ *
  * @typeParam T - Object type returned by the polling command
  * @param command - Async function that returns the object to inspect
  * @param fieldPath - Dot or bracket notation path to the field
@@ -308,12 +327,95 @@ export async function waitForResponseFieldValue<T extends Record<string, unknown
 }
 
 /**
+ * Determine whether a nested field exists on an object using dot and bracket notation.
+ *
+ * @typeParam T - Object type returned by the polling command
+ * @param value - Source object to inspect
+ * @param path - Field path such as "data.user.email" or "items[0].id"
+ * @returns True when the full path exists on the object, even if the value is null
+ */
+function hasNestedField(value: unknown, path: string): boolean {
+  if (!path.trim()) {
+    return false;
+  }
+
+  const segments = path.replace(/\[(\d+)\]/g, ".$1").split(".");
+  let current: unknown = value;
+
+  for (const segment of segments) {
+    if (current === null || current === undefined) {
+      return false;
+    }
+
+    if (typeof current !== "object") {
+      return false;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(current, segment)) {
+      return false;
+    }
+
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  return true;
+}
+
+/**
+ * Wait until a nested field exists in the response body.
+ *
+ * Example:
+ * ```ts
+ * const response = await waitForFieldExistance(
+ *   () => restoApi.getOrderDetails(orderId),
+ *   "order.drivers_distance_info.total_distance",
+ *   { timeoutMs: 10_000, intervalMs: 1_000 }
+ * );
+ * ```
+ *
+ * Use this when the field may appear later, but you do not care about its value yet.
+ *
+ * @typeParam T - Object type returned by the polling command
+ * @param command - Async function that returns the object to inspect
+ * @param fieldPath - Dot or bracket notation path to the field
+ * @param options - Polling timeout, interval, and logging behavior
+ * @returns The object that contains the requested field
+ */
+export async function waitForFieldExistance<T extends Record<string, unknown>>(
+  command: () => Promise<T>,
+  fieldPath: string,
+  options: PollingOptions<T> = {}
+): Promise<T> {
+  const message = options.message ?? `Waiting for field ${fieldPath} to exist`;
+
+  return recurse(
+    command,
+    (response) => hasNestedField(response, fieldPath),
+    {
+      ...options,
+      message,
+      log:
+        options.log ??
+        ((context) => {
+          if (context.error) {
+            return `[Polling] ${message} | attempt ${context.attempt} | error=${describeValue(context.error)} | elapsed ${context.elapsedMs}ms / ${context.timeoutMs}ms`;
+          }
+
+          const exists = context.value ? hasNestedField(context.value, fieldPath) : false;
+          return `[Polling] ${message} | attempt ${context.attempt} | ${fieldPath} exists=${exists} | elapsed ${context.elapsedMs}ms / ${context.timeoutMs}ms`;
+        }),
+    }
+  );
+}
+
+/**
  * Convenient helper bundle for import or fixture based usage.
  */
 export const polling = {
   recurse,
   waitForResponseStatus,
   waitForResponseFieldValue,
+  waitForFieldExistance,
   getNestedValue,
 };
 

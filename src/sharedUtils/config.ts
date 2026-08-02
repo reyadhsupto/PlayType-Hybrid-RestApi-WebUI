@@ -38,6 +38,12 @@ export type DatabaseConfig = {
   connections: Record<string, NamedDatabaseConfig>;
 };
 
+export type ApiBaseUrlsConfig = {
+  user: string;
+  resto: string;
+  driver: string;
+};
+
 //Determining environment (default :- 'stage')
 const ENV = process.env.ENV || "stage";
 
@@ -158,8 +164,16 @@ const config = {
   logLevel: "info",
 
   api_base_url: process.env.api_base_url || "",
+  api_base_urls: {
+    user: process.env.user_api_base_url || process.env.api_base_url || "",
+    resto: process.env.resto_api_base_url || process.env.api_base_url || "",
+    driver: process.env.driver_api_base_url || process.env.api_base_url || "",
+  } as ApiBaseUrlsConfig,
   api_base_path: "/v1/me/foods",
-  api_gateway_bearer_token: process.env.API_BEARER_TOKEN || process.env.API_GATEWAY_BEARER_TOKEN || "",
+  api_gateway_bearer_token: process.env.API_BEARER_TOKEN || "",
+  user_bearer_token: "",
+  driver_bearer_token: "",
+  resto_bearer_token: "",
   dashboard_url: process.env.dashboard_url || "",
   dashboard_domain: process.env.domain || "",
   auth: { //auth json for UI

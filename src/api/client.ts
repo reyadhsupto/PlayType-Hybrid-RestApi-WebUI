@@ -21,6 +21,7 @@ export interface ApiRequestOptions {
   headers?: Record<string, string>;
   query_params?: string | URLSearchParams | Record<string, string | number | boolean>;
   payload?: object | string;
+  log_label?: string;
 }
 
 /**
@@ -80,6 +81,20 @@ export class ApiClient {
   }
 
   /**
+   * Build a stable log label so request and response lines can be grouped
+   * by method + endpoint in the log file.
+   */
+  private buildEndpointLabel(
+    scope: "Context" | "One Off",
+    method: string,
+    endpoint: string,
+    logLabel?: string
+  ): string {
+    const endpointLabel = `[${scope}] ${method.toUpperCase()} ${endpoint}`;
+    return logLabel ? `${logLabel} | ${endpointLabel}` : endpointLabel;
+  }
+
+  /**
    * Executes HTTP API calls using requestContext with baseURL concatenation.
    * Structured approach for internal/main API endpoints.
    * 
@@ -133,13 +148,15 @@ export class ApiClient {
     // Construct full endpoint: baseUrl + path + query
     const endpoint = `${this.baseUrl}${path_param}${queryString}`;
 
+    const endpointLabel = this.buildEndpointLabel("Context", options.method, endpoint, options.log_label);
+
     // Log request details
     logger.info(`[Context] Api Endpoint: ${options.method.toUpperCase()} - ${endpoint}`);
     if (options.headers) {
-      logger.debug(`Request Headers: ${JSON.stringify(options.headers, null, 2)}`);
+      logger.debug(`${endpointLabel} | Request Headers: ${JSON.stringify(options.headers, null, 2)}`);
     }
     if (["POST", "PUT", "PATCH"].includes(options.method.toUpperCase()) && options.payload) {
-      logger.debug(`Request Payload: ${JSON.stringify(options.payload, null, 2)}`);
+      logger.debug(`${endpointLabel} | Request Payload: ${JSON.stringify(options.payload, null, 2)}`);
     }
 
     try {
@@ -155,9 +172,7 @@ export class ApiClient {
       });
 
       // Log response
-      const responseBody = await response.json().catch(() => null);
-      logger.info(`Response Status :-> ${response.status()}`);
-      logger.debug(`Api Response:-> ${JSON.stringify(responseBody, null, 2)}`);
+      await this.logResponse(response, endpointLabel);
 
       return response;
     } catch (err) {
@@ -205,16 +220,18 @@ export class ApiClient {
     // Extract options
     const { url, method, headers, query_params, payload } = options;
 
+    const endpointLabel = this.buildEndpointLabel("One Off", method, url, options.log_label);
+
     // Log request details
     logger.info(`[One Off] Api Endpoint: ${method.toUpperCase()} -  ${url}`);
     if (headers) {
-      logger.debug(`Request Headers: ${JSON.stringify(headers, null, 2)}`);
+      logger.debug(`${endpointLabel} | Request Headers: ${JSON.stringify(headers, null, 2)}`);
     }
     if (query_params) {
-      logger.debug(`Query Params: ${JSON.stringify(query_params, null, 2)}`);
+      logger.debug(`${endpointLabel} | Query Params: ${JSON.stringify(query_params, null, 2)}`);
     }
     if (payload && ["POST", "PUT", "PATCH"].includes(method.toUpperCase())) {
-      logger.debug(`Request Payload: ${JSON.stringify(payload, null, 2)}`);
+      logger.debug(`${endpointLabel} | Request Payload: ${JSON.stringify(payload, null, 2)}`);
     }
 
     try {
@@ -260,7 +277,7 @@ export class ApiClient {
       }
 
       // Log response
-      await this.logResponse(response);
+      await this.logResponse(response, endpointLabel);
       return response;
     } catch (err) {
       // Log error and re-throw
@@ -288,22 +305,22 @@ export class ApiClient {
    * 3. Falls back to text if JSON fails
    * 4. Logs "[Unable to parse]" if both fail
    */
-  private async logResponse(response: APIResponse): Promise<void> {
+  private async logResponse(response: APIResponse, endpointLabel: string): Promise<void> {
     // Always log status
-    logger.info(`Response Status: ${response.status()}`);
+    logger.info(`${endpointLabel} | Response Status: ${response.status()}`);
 
     try {
       // Try JSON parsing first
       const responseBody = await response.json();
-      logger.debug(`Response Body: ${JSON.stringify(responseBody, null, 2)}`);
+      logger.debug(`${endpointLabel} | Response Body: ${JSON.stringify(responseBody, null, 2)}`);
     } catch {
       // Not JSON, try text
       try {
         const responseText = await response.text();
-        logger.debug(`Response Body (text): ${responseText}`);
+        logger.debug(`${endpointLabel} | Response Body (text): ${responseText}`);
       } catch {
         // Unable to parse
-        logger.debug(`Response Body: [Unable to parse]`);
+        logger.debug(`${endpointLabel} | Response Body: [Unable to parse]`);
       }
     }
   }
