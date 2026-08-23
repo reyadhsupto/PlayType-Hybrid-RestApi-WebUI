@@ -211,6 +211,46 @@ test("Use config values", async ({ rwService }) => {
 
 ---
 
+---
+
+## Electron Configuration
+
+Configuration for testing packaged Electron (desktop) apps. See the
+[Electron Testing Guide](./ELECTRON_TESTING.md) for setup, supported artifact
+types (`.app`, `.dmg`, `.AppImage`, `.deb`, `.exe`, `.msi`), and where to
+place your packaged app.
+
+```env
+# ==================================
+# Electron (packaged desktop app) UI Testing
+# ==================================
+ELECTRON_ENABLED=true
+ELECTRON_DMG_PATH="resources/MyApp-1.0.0-universal.dmg"
+ELECTRON_BINARY_PATH=""
+ELECTRON_LAUNCH_TIMEOUT=90000
+ELECTRON_ARGS=""
+# Credentials used by sample/demo login page objects
+ELECTRON_APP_EMAIL=""
+ELECTRON_APP_PASSWORD=""
+```
+
+| Env Variable | Config Key | Description | Default |
+|--------------|------------|-------------|---------|
+| `ELECTRON_ENABLED` | `enabled` | Master switch; when false Electron tests fail fast with a clear message | `false` |
+| `ELECTRON_DMG_PATH` | `dmgPath` | Path to a packaged app artifact (`.app`, `.dmg`, `.AppImage`, `.deb`, `.exe`, `.msi`) | `""` |
+| `ELECTRON_BINARY_PATH` | `binaryPath` | Optional explicit executable path; takes priority over package resolution | `""` |
+| `ELECTRON_LAUNCH_TIMEOUT` | `launchTimeout` | Max ms to wait for the app to boot | `60000` |
+| `ELECTRON_ARGS` | `args` | Extra CLI args forwarded to the app | `""` |
+| `ELECTRON_APP_EMAIL` | `auth.email` | Demo login email for sample page objects | `""` |
+| `ELECTRON_APP_PASSWORD` | `auth.password` | Demo login password for sample page objects | `""` |
+
+`config.electron` exposes these at runtime and `config.electron.appBundleDir`
+(`electron/build/`) is where the `.app` bundle is extracted and cached. At least
+one of `ELECTRON_DMG_PATH` or `ELECTRON_BINARY_PATH` must be set; otherwise the
+harness throws a clear "no app configured" error.
+
+---
+
 ## Consul Integration
 
 ### What is Consul?

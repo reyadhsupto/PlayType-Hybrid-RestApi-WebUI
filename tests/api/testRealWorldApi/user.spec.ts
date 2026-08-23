@@ -54,7 +54,7 @@ test.describe( "Check direct api call", { tag: ['@SC_002'] }, ()=>{
 });
 
 test.describe( "Check fixture test.use", { tag: ['@SC_003'] }, ()=>{
-        test.use({
+      test.use({
          baseURL: "https://api.p-stageenv.xyz",
          extraHTTPHeaders: { "Authorization": "Bearer token123" }
       });

@@ -44,6 +44,43 @@ export type ApiBaseUrlsConfig = {
   driver: string;
 };
 
+/**
+ * Credentials used by Electron page objects to authenticate to the app.
+ *
+ * @property email - Login email from ELECTRON_APP_EMAIL
+ * @property password - Login password from ELECTRON_APP_PASSWORD
+ */
+export type ElectronAuthConfig = {
+  email: string;
+  password: string;
+};
+
+/**
+ * Configuration for Electron (packaged desktop app) UI testing.
+ *
+ * Either {@link ElectronConfig.dmgPath} or {@link ElectronConfig.binaryPath}
+ * must be set; otherwise the harness fails fast with a clear message.
+ *
+ * @property enabled - Master switch; when false Electron tests fail fast with a clear message
+ * @property dmgPath - Path to a packaged app artifact (.app, .dmg, .AppImage, .deb, .exe, .msi).
+ *                     Defaults to "" - set ELECTRON_DMG_PATH in .env to enable package resolution
+ * @property appBundleDir - Directory holding the .app bundle extracted/cached from a DMG
+ * @property binaryPath - Optional path to the app binary. When set it takes priority and bypasses
+ *                        package resolution, so it can also point at an already installed binary
+ * @property launchTimeout - Max time (ms) allowed for the Electron app process to boot
+ * @property args - Extra CLI args forwarded to the launched application
+ * @property auth - Login credentials used to authenticate as the app's admin user
+ */
+export type ElectronConfig = {
+  enabled: boolean;
+  dmgPath: string;
+  appBundleDir: string;
+  binaryPath: string;
+  launchTimeout: number;
+  args: string[];
+  auth: ElectronAuthConfig;
+};
+
 //Determining environment (default :- 'stage')
 const ENV = process.env.ENV || "stage";
 
@@ -220,6 +257,19 @@ const config = {
     defaultPoolMax: Number(process.env.DB_POOL_MAX) || 10,
     connections: loadNamedDatabases(),
   } as DatabaseConfig,
+
+  electron: {
+    enabled: process.env.ELECTRON_ENABLED === "true",
+    dmgPath: process.env.ELECTRON_DMG_PATH || "",
+    appBundleDir: "electron/build",
+    binaryPath: process.env.ELECTRON_BINARY_PATH || "",
+    launchTimeout: Number(process.env.ELECTRON_LAUNCH_TIMEOUT) || 60000,
+    args: (process.env.ELECTRON_ARGS || "").split(",").filter((arg) => arg.trim() !== ""),
+    auth: {
+      email: process.env.ELECTRON_APP_EMAIL || "",
+      password: process.env.ELECTRON_APP_PASSWORD || "",
+    },
+  } as ElectronConfig,
 
   ENV,
 };

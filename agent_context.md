@@ -1,6 +1,6 @@
 # Agent Context
 
-Last updated: 2026-08-02
+Last updated: 2026-08-23
 
 ## Project Snapshot
 
@@ -103,3 +103,20 @@ Last updated: 2026-08-02
 - If fewer than 3 no addon items are available, the payload uses the smaller set
 - Addon fallback is optional and requires `fetchItemDetails` plus `allowAddonFallback=true`
 - `FoodApi.getRestaurantItemDetails(itemId)` exists for addon aware item resolution
+
+## Electron Testing Design
+
+- Electron (packaged desktop app) UI testing lives under `src/ui/electron/`. The harness is **app-agnostic**: no product-specific names exist in the resolver, launcher, or fixtures - you point it at any packaged Electron app via env config.
+- Config lives in `config.electron` (see `src/sharedUtils/config.ts` and `.env.stage`) with keys: `enabled`, `dmgPath`, `appBundleDir` (`electron/build/`), `binaryPath`, `launchTimeout`, `args`, `auth`. `dmgPath` defaults to `""` and `binaryPath` can be used standalone (installed binary); at least one of the two must be set or the harness throws a clear error.
+- `src/ui/electron/electronPackageResolver.ts` resolves `.app` directly, `.dmg` via `hdiutil` (cached into `electron/build/`), `.AppImage` directly, extracts `.deb` via `dpkg-deb` and `.exe`/`.msi` via `7z`/`bsdtar`. The Windows launcher is found generically (top-level `.exe`, then `resources/app/`, then a recursive scan) - no hardcoded Pathao Resto names remain.
+- Launch: `src/ui/electron/electronLauncher.ts` calls `_electron.launch({ executablePath, args })` with a fresh temporary `user-data-dir` per launch so Electron sessions start clean instead of reusing cached login state.
+- Cleanup: `tests/baseElectronTest.ts` installs process shutdown hooks for `SIGINT`, `SIGTERM`, `uncaughtException`, and `unhandledRejection` so the packaged app and temporary session dir are cleaned up on Ctrl+C or abrupt runner failures.
+- Cold start: graceful waiting via `waitForReadyWindow()` which polls `firstWindow()` + `domcontentloaded` using the shared `recurse` polling helper (configurable predicate/timeout/interval). No fixed sleeps.
+- Page objects: `ElectronBasePage extends BasePage` (`src/ui/pages/electronBasePage.ts`) adds `waitUntilReady()`, `mainProcess()`, `windowCount()`, `captureView()`, and a self-contained `takeScreenshot()` (ensures `.png` extension, creates `screenshots/`, attaches to report). All `BasePage` actions carry over because Electron windows are Playwright `Page`s.
+- Page object manager: `src/ui/electron/electronPoManager.ts` is app-agnostic and registration based - `register(name, page)` / `get(name)` / `has(name)`. Registered pages automatically receive the owner's `app` and `appPath` so main-process helpers work.
+- Fixtures: `tests/baseElectronTest.ts` exposes worker-scoped `electronApp` plus test-scoped core fixtures `electronPage`/`appElectron`/`appReady`/`electronPoManager`, and clearly labeled **sample** fixtures `pathaoApp`/`loginPage`/`restoApp` for the bundled "Pathao Resto" demo app (removable for another product).
+- Project config: `playwright.config.ts` adds an `Electron` project with `testDir: './tests/electron'`.
+- Makefile: `make prepare-electron` (prepare/extract bundle) and `make test-electron` (run Electron project). `make test-tag` infers the Electron project from `tests/electron/*` files or `@ELECTRON` markers.
+- Specs: `tests/electron/appLaunch.spec.ts` is the generic app-agnostic smoke test; `tests/electron/login.spec.ts` is the sample demo spec that uses the sample fixtures. The leftover `pathaoApp.pause()` that hung previous runs was removed.
+- Docs: `docs/ELECTRON_TESTING.md` documents the app-agnostic harness, configuration, where to place a packaged app (folder convention, picking between multiple builds, DMG caching), a "bring your own app" checklist, and the bundled demo. `docs/CONFIGURATION.md` and `docs/FIXTURES.md` now reflect the generic config/fixtures split.
+- Auth: AUTH_TOKEN/localStorage auth is not yet applied for Electron; web `setupAuth` can be adapted via `electronApp.context().addInitScript` once credentials are available.
