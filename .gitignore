@@ -147,3 +147,12 @@ test-results/*
 
 #config runtime
 runtime-config.json
+
+# Electron packaged app (extracted/cached from DMG)
+electron/build/
+
+# UI screenshots
+screenshots/
+
+# local app builds
+resources/*

@@ -41,6 +41,14 @@ A production-ready hybrid test automation framework built with **Playwright** an
 - **Network interception** - Mock APIs, modify responses, track requests
 - **Screenshot capture** - Automatic failure screenshots
 
+### Desktop (Electron) Testing
+- **App-agnostic harness** - test any packaged Electron app (`.app`, `.dmg`, `.AppImage`, `.deb`, `.exe`, `.msi`)
+- **Graceful cold start** - polls for the first window instead of fixed sleeps
+- **Generic fixtures** - `electronApp`, `electronPage`, `appElectron`, `appReady`, `electronPoManager`
+- **Registered page object manager** - `register()` / `get()` / `has()` for app-specific page objects
+- **Main-process helpers** - version/name reads, window counts, native window capture
+- **Bundled demo** - "Pathao Resto" sample page objects and specs to model your own app
+
 ### Framework Features
 - **TypeScript** - Full type safety and IntelliSense support
 - **Playwright fixtures** - Test isolation and parallel execution
@@ -181,7 +189,15 @@ playtype-hybrid-framework/
 │   │   ├── 📂 pages/
 │   │   │   ├── basePage.ts               # Base page actions
 │   │   │   ├── createQuestPage.ts        # Example page object
+│   │   │   ├── electronBasePage.ts       # Electron page object base (generic)
+│   │   │   ├── electronPathaoAppPage.ts  # Sample Electron app page (demo, removable)
+│   │   │   ├── electronLoginPage.ts      # Sample Electron login page (demo, removable)
 │   │   │   └── updateQuestPage.ts
+│   │   ├── 📂 electron/
+│   │   │   ├── electronLauncher.ts       # Launch + graceful wait + close
+│   │   │   ├── electronPackageResolver.ts # Resolve/extract packaged app
+│   │   │   ├── electronPoManager.ts      # App-agnostic page object manager
+│   │   │   └── prepareScript.ts          # CLI to prepare/cache the bundle
 │   │   ├── 📂 actions/
 │   │   │   └── helperActions.ts          # Network interception, uploads
 │   │   ├── 📂 uiUtils/
@@ -201,8 +217,12 @@ playtype-hybrid-framework/
 │   │   └── schemas.ts                    # Zod/JSON schemas
 │   ├── 📂 ui/
 │   │   └── createQuestPage.spec.ts       # UI test examples
+│   ├── 📂 electron/
+│   │   ├── appLaunch.spec.ts             # Generic Electron smoke test (any app)
+│   │   └── login.spec.ts                 # Sample Electron login test (demo app)
 │   ├── BaseApiTest.ts                    # API fixtures & BaseTest
-│   └── baseUiTest.ts                     # UI fixtures
+│   ├── baseUiTest.ts                     # UI fixtures
+│   └── baseElectronTest.ts               # Electron fixtures (core + sample)
 ├── 📂 metrics/
 │   ├── generate-metrics.ts               # Prometheus metrics generator
 │   ├── playwright-metrics.prom           # Generated metrics file
@@ -210,10 +230,14 @@ playtype-hybrid-framework/
 ├── 📂 docs/                              # Documentation
 │   ├── API_TESTING.md
 │   ├── UI_TESTING.md
+│   ├── ELECTRON_TESTING.md
 │   ├── FIXTURES.md
 │   ├── DATABASE.md
 │   ├── POLLING.md
 │   └── EXAMPLES.md
+├── 📂 resources/                         # Packaged app artifacts (Electron)
+│   └── MyApp-1.0.0-universal.dmg        # Point ELECTRON_DMG_PATH at the file to use
+├── 📂 electron/build/                    # Cached .app bundle / extracted desktop app (git-ignored)
 ├── 📄 .env.stage                         # Stage environment config
 ├── 📄 .env.prod                          # Production environment config
 ├── 📄 playwright.config.ts               # Playwright configuration
@@ -258,6 +282,11 @@ make test-file FILE=tests/api/testRealWorldApi/user.spec.ts
 
 # Run tests with tag
 make test-tag TAG="smoke"
+make test-tag TAG="EL_001"
+
+# Run Electron tests only
+make prepare-electron
+make test-electron
 
 # View HTML report
 make report
@@ -272,6 +301,7 @@ Comprehensive guides available in `/docs`:
 |----------|-------------|
 | **[API Testing Guide](./docs/API_TESTING.md)** | API client usage, fixtures, validation strategies |
 | **[UI Testing Guide](./docs/UI_TESTING.md)** | Page objects, auth setup, UI fixtures |
+| **[Electron Testing](./docs/ELECTRON_TESTING.md)** | Packaged desktop (Electron) app testing |
 | **[Fixtures Guide](./docs/FIXTURES.md)** | Fixture usage, `test.use()` overrides, examples |
 | **[Database Testing](./docs/DATABASE.md)** | DB queries, SSH tunneling, validation |
 | **[Polling Guide](./docs/POLLING.md)** | Reusable polling helper, status checks, field checks |
@@ -301,6 +331,20 @@ make test-file FILE=tests/ui/createQuestPage.spec.ts ENV=prod
 make test-tag TAG="regression"
 make test-tag TAG="smoke and api"
 make test-tag TAG="TC_001 or TC_002"
+make test-tag TAG="EL_001"
+
+# Tag routing is project-aware:
+# - tests/ui -> Chromium
+# - tests/api -> API
+# - tests/electron -> Electron
+# Mixed API/UI files are resolved from the matching file and suite tags.
+#
+# API request headers can be set per spec with:
+# test.use({ baseURL, apiRequestHeaders, extraHTTPHeaders })
+
+# Prepare and run packaged Electron tests
+make prepare-electron
+make test-electron
 
 # Run tests multiple times (lead generation)
 make test RCOUNT=5
@@ -732,6 +776,7 @@ This project is licensed under the MIT License.
 
 - [API Testing Guide](./docs/API_TESTING.md)
 - [UI Testing Guide](./docs/UI_TESTING.md)
+- [Electron Testing](./docs/ELECTRON_TESTING.md)
 - [Fixtures Reference](./docs/FIXTURES.md)
 - [Database Guide](./docs/DATABASE.md)
 - [Polling Guide](./docs/POLLING.md)

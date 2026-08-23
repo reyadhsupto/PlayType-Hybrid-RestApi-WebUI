@@ -17,9 +17,9 @@ import { polling as pollingHelpers, type PollingHelpers } from "../src/sharedUti
 
 // Load config from Consul if enabled
 let envConfig = config;
-if(config.useConsul){
-    const runtimeConfigPath = path.join(process.cwd(), "runtime-config.json");
-    envConfig = JSON.parse(fs.readFileSync(runtimeConfigPath, "utf-8"));
+if (config.useConsul) {
+  const runtimeConfigPath = path.join(process.cwd(), "runtime-config.json");
+  envConfig = JSON.parse(fs.readFileSync(runtimeConfigPath, "utf-8"));
 }
 
 /**
@@ -31,6 +31,8 @@ if(config.useConsul){
 const sharedDbClient = new DatabaseService(envConfig);
 
 type TestOptions = {
+  baseURL?: string;
+  apiExtraHTTPHeaders?: Record<string, string>;
   userBaseUrl: string;
   restoBaseUrl: string;
   driverBaseUrl: string;
@@ -39,13 +41,13 @@ type TestOptions = {
 /**
  * Build the request headers used for API test contexts.
  *
- * @param extraHTTPHeaders - Per-test headers supplied via test options
+ * @param apiExtraHTTPHeaders - Per-test headers supplied via test options
  * @returns Final merged headers for request.newContext()
  */
-function buildApiHeaders(extraHTTPHeaders: Record<string, string> = {}): Record<string, string> {
+function buildApiHeaders(apiExtraHTTPHeaders: Record<string, string> | undefined): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...extraHTTPHeaders,
+    ...(apiExtraHTTPHeaders ?? {}),
   };
 
   if (config.api_gateway_bearer_token && !headers.Authorization) {
@@ -74,15 +76,15 @@ function resolveBaseUrl(candidate: string | undefined, fallback: string): string
  *
  * @param serviceName - Human readable service label used in logs
  * @param baseURL - Base URL for the service
- * @param extraHTTPHeaders - Extra headers merged into the request context
+ * @param apiExtraHTTPHeaders - Extra headers merged into the request context
  * @returns A configured Playwright API request context
  */
 async function createServiceApiContext(
   serviceName: string,
   baseURL: string,
-  extraHTTPHeaders: Record<string, string>
+  apiExtraHTTPHeaders: Record<string, string> | undefined
 ): Promise<APIRequestContext> {
-  const mergedHeaders = buildApiHeaders(extraHTTPHeaders);
+  const mergedHeaders = buildApiHeaders(apiExtraHTTPHeaders);
   BaseTest.logger.info(`Setting up ${serviceName} API context for: ${baseURL}`);
   BaseTest.logger.debug(`[${serviceName}] Headers: ${JSON.stringify(mergedHeaders, null, 2)}`);
 
@@ -94,7 +96,7 @@ async function createServiceApiContext(
 
 /**
  * Fixtures provided to each test.
- * 
+ *
  * @interface TestFixtures
  * @property {APIRequestContext} apiContext - Playwright API request context (auto cleanup)
  * @property {APIRequestContext} userApiContext - User service API request context
@@ -134,22 +136,28 @@ type WorkerFixtures = {
 
 /**
  * Extended Test with Options and Fixtures
- * 
+ *
  * @description
  * Provides:
- * - TestOptions: Configurable per test/file (baseURL, extraHTTPHeaders)
+ * - TestOptions: Configurable per test/file (baseURL, apiExtraHTTPHeaders)
  * - TestFixtures: Injected dependencies (apiContext, apiClient, rwService, dbClient)
- * 
+ *
  * Usage:
  *   // Override baseURL and headers per test file
  *   test.use({
  *     baseURL: "https://api.github.com",
- *     extraHTTPHeaders: { "Authorization": "Bearer token123" }
+ *     apiExtraHTTPHeaders: { "Authorization": "Bearer token123" }
  *   });
- * 
+ *
  *   test("example", async ({ rwService }) => {
  *     await rwService.loginUser(payload);
  *   });
+ *
+ * IMPORTANT: Fixture functions below destructure their dependencies WITHOUT
+ * default values (e.g. `{ apiExtraHTTPHeaders }`, not `{ apiExtraHTTPHeaders = {} }`).
+ * Playwright statically parses fixture signatures via source text to build its
+ * dependency graph, and destructuring defaults break that parser with an
+ * "unknown parameter" error. Apply any defaults inside the function body instead.
  */
 export const test = base.extend<TestOptions & TestFixtures, WorkerFixtures>({
   /**
@@ -177,21 +185,41 @@ export const test = base.extend<TestOptions & TestFixtures, WorkerFixtures>({
   driverBaseUrl: [config.api_base_urls.driver, { option: true }],
 
   /**
+   * Optional extra request headers shared by all API request contexts.
+   *
+   * Named `apiExtraHTTPHeaders` (not `extraHTTPHeaders`) to avoid colliding
+   * with Playwright's built-in `extraHTTPHeaders` test option.
+   *
+   * @option apiExtraHTTPHeaders
+   * @default {}
+   *
+   * @description
+   * Override in test file:
+   *   test.use({
+   *     apiExtraHTTPHeaders: {
+   *       "Authorization": "Bearer token",
+   *       "X-Custom-Header": "value"
+   *     }
+   *   });
+   */
+  apiExtraHTTPHeaders: [{}, { option: true }],
+
+  /**
    * Creates and manages Playwright API request context.
-   * Uses baseURL and extraHTTPHeaders from test options.
+   * Uses baseURL and apiExtraHTTPHeaders from test options.
    * Automatically disposed after each test.
-   * 
+   *
    * @fixture apiContext
    * @scope test
-   * 
+   *
    * @param {string} baseURL - Base URL from test options
-   * @param {Record<string, string>} extraHTTPHeaders - Headers from test options
-   * 
+   * @param {Record<string, string>} apiExtraHTTPHeaders - Headers from test options
+   *
    * @returns {APIRequestContext} Configured request context
    */
-  apiContext: async ({ baseURL, extraHTTPHeaders = {} }, use) => {
+  apiContext: async ({ baseURL, apiExtraHTTPHeaders }, use) => {
     const resolvedBaseURL = baseURL ?? config.api_base_url;
-    const context = await createServiceApiContext("api", resolvedBaseURL, extraHTTPHeaders);
+    const context = await createServiceApiContext("api", resolvedBaseURL, apiExtraHTTPHeaders);
 
     await use(context);
 
@@ -205,9 +233,9 @@ export const test = base.extend<TestOptions & TestFixtures, WorkerFixtures>({
    * @fixture userApiContext
    * @scope test
    */
-  userApiContext: async ({ userBaseUrl, extraHTTPHeaders = {} }, use) => {
+  userApiContext: async ({ userBaseUrl, apiExtraHTTPHeaders }, use) => {
     const resolvedBaseURL = resolveBaseUrl(userBaseUrl, config.api_base_urls.user);
-    const context = await createServiceApiContext("user", resolvedBaseURL, extraHTTPHeaders);
+    const context = await createServiceApiContext("user", resolvedBaseURL, apiExtraHTTPHeaders);
 
     await use(context);
 
@@ -221,9 +249,9 @@ export const test = base.extend<TestOptions & TestFixtures, WorkerFixtures>({
    * @fixture restoApiContext
    * @scope test
    */
-  restoApiContext: async ({ restoBaseUrl, extraHTTPHeaders = {} }, use) => {
+  restoApiContext: async ({ restoBaseUrl, apiExtraHTTPHeaders }, use) => {
     const resolvedBaseURL = resolveBaseUrl(restoBaseUrl, config.api_base_urls.resto);
-    const context = await createServiceApiContext("resto", resolvedBaseURL, extraHTTPHeaders);
+    const context = await createServiceApiContext("resto", resolvedBaseURL, apiExtraHTTPHeaders);
 
     await use(context);
 
@@ -237,9 +265,9 @@ export const test = base.extend<TestOptions & TestFixtures, WorkerFixtures>({
    * @fixture driverApiContext
    * @scope test
    */
-  driverApiContext: async ({ driverBaseUrl, extraHTTPHeaders = {} }, use) => {
+  driverApiContext: async ({ driverBaseUrl, apiExtraHTTPHeaders }, use) => {
     const resolvedBaseURL = resolveBaseUrl(driverBaseUrl, config.api_base_urls.driver);
-    const context = await createServiceApiContext("driver", resolvedBaseURL, extraHTTPHeaders);
+    const context = await createServiceApiContext("driver", resolvedBaseURL, apiExtraHTTPHeaders);
 
     await use(context);
 
@@ -250,13 +278,13 @@ export const test = base.extend<TestOptions & TestFixtures, WorkerFixtures>({
   /**
    * Creates custom ApiClient wrapper around Playwright context.
    * Depends on apiContext fixture and baseURL option.
-   * 
+   *
    * @fixture apiClient
    * @scope test
-   * 
+   *
    * @param {APIRequestContext} apiContext - Request context from fixture
    * @param {string} baseURL - Base URL from test options
-   * 
+   *
    * @returns {ApiClient} API client instance
    */
   apiClient: async ({ apiContext, baseURL }, use) => {
@@ -304,12 +332,12 @@ export const test = base.extend<TestOptions & TestFixtures, WorkerFixtures>({
   /**
    * Creates RealWorld API service instance.
    * Depends on apiClient fixture.
-   * 
+   *
    * @fixture rwService
    * @scope test
-   * 
+   *
    * @param {ApiClient} apiClient - API client from fixture
-   * 
+   *
    * @returns {realWorldService} RealWorld service instance
    */
   rwService: async ({ apiClient }, use) => {
@@ -320,12 +348,12 @@ export const test = base.extend<TestOptions & TestFixtures, WorkerFixtures>({
   /**
    * Creates food API service instance.
    * Depends on apiClient fixture.
-   * 
+   *
    * @fixture foodApi
    * @scope test
-   * 
+   *
    * @param {ApiClient} apiClient - API client from fixture
-   * 
+   *
    * @returns {FoodApi} Food API service instance
    */
   foodApi: async ({ apiClient }, use) => {
@@ -360,9 +388,9 @@ export const test = base.extend<TestOptions & TestFixtures, WorkerFixtures>({
 
 export { expect } from "@playwright/test";
 
-/** 
+/**
  * @class BaseTest
- * 
+ *
  * @description
  * Provides static access to:
  * - logger: Winston logger for test logging
@@ -425,13 +453,13 @@ export class BaseTest {
 
   /**
    * Logs test title for tracking and debugging.
-   * 
+   *
    * @method logTestTitle
    * @static
-   * 
+   *
    * @param {string} message - Message prefix
    * @param {string} testTitle - Test title from test.info().title
-   * 
+   *
    * @returns {void} No return value
    */
   static logTestTitle(message: string, testTitle: string): void {

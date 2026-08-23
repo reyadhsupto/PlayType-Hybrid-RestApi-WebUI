@@ -75,7 +75,20 @@ export default defineConfig({
         screenshot: 'off',
         video: 'off',
       },
-    }
+    },
+    // ================= ELECTRON PROJECT =================
+    // Packaged desktop app (Electron) tests. The app is launched with
+    // _electron.launch() from an extracted/cached bundle; no browser is used.
+    {
+      name: 'Electron',
+      testDir: './tests/electron',
+      grepInvert: /@skip-electron/,
+      use: {
+        screenshot: 'only-on-failure',
+        video: 'off',
+        trace: 'on-first-retry',
+      },
+    },
   ],
   reporter: [['list'], ['html', { outputFolder: 'reports', open: 'always' }],["json", { outputFile: "playwright-report/results.json" }],
     [

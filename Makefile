@@ -50,6 +50,19 @@ setup: deps playwright
 build:
 	npx tsc --noEmit
 
+# Prepare & cache the packaged Electron app (one-time setup; supports .app/.dmg/.AppImage/.deb/.exe/.msi)
+.PHONY: prepare-electron
+prepare-electron:
+	@echo "Preparing Electron app (resolving configured package)..."
+	NODE_ENV=${ENV} npx tsx src/ui/electron/prepareScript.ts
+
+# Run Electron (packaged desktop app) tests
+# Usage: make test-electron ENV=stage RCOUNT=1
+.PHONY: test-electron
+test-electron:
+	@echo "Running Electron tests..."
+	NODE_ENV=${ENV} npx playwright test --project=Electron --repeat-each=$(RCOUNT)
+
 # Run tests
 .PHONY: test
 test:
@@ -70,24 +83,62 @@ test-tag:
 	@if [ -z "$(TAG)" ]; then \
 		echo "Please provide TAG parameter. Example: make test-tag TAG=\"quest\""; \
 		exit 1; \
-	elif echo "$(TAG)" | grep -q " and "; then \
-		TAGS=$$(echo "$(TAG)" | tr " " "\n" | grep -v "and"); \
-		REGEX=""; \
-		for tag in $$TAGS; do \
-			REGEX="$$REGEX(?=.*@$$tag)"; \
-		done; \
-		NODE_ENV=$(ENV) npx playwright test --grep "$$REGEX" --repeat-each=$(RCOUNT); \
-	elif echo "$(TAG)" | grep -q " or "; then \
-		TAGS=$$(echo "$(TAG)" | tr " " "\n" | grep -v "or"); \
-		REGEX=""; \
-		for tag in $$TAGS; do \
-			REGEX="$$REGEX@$$tag|"; \
-		done; \
-		REGEX=$${REGEX%|}; \
-		NODE_ENV=$(ENV) npx playwright test --grep "$$REGEX" --repeat-each=$(RCOUNT); \
 	else \
-		echo "Running tests matching tag: @$(TAG) with repeat-each=$(RCOUNT)"; \
-		NODE_ENV=$(ENV) npx playwright test --grep "@$(TAG)" --repeat-each=$(RCOUNT); \
+		TAG_EXPR="$(TAG)"; \
+		GREP_EXPR=""; \
+		PROJECTS=""; \
+		add_project() { \
+			case " $$PROJECTS " in \
+				*" $$1 "*) ;; \
+				*) PROJECTS="$$PROJECTS $$1" ;; \
+			esac; \
+		}; \
+		add_project_from_file() { \
+			file="$$1"; \
+			case "$$file" in \
+				tests/ui/*) add_project Chromium ;; \
+				tests/api/*) add_project API ;; \
+				tests/electron/*) add_project Electron ;; \
+			esac; \
+			if rg -q -F '@UI' "$$file"; then \
+				add_project Chromium; \
+			fi; \
+			if rg -q -F '@API' "$$file"; then \
+				add_project API; \
+			fi; \
+			if rg -q -F '@ELECTRON' "$$file"; then \
+				add_project Electron; \
+			fi; \
+		}; \
+		if echo "$$TAG_EXPR" | grep -q " and "; then \
+			TAGS=$$(echo "$$TAG_EXPR" | tr " " "\n" | grep -v "and"); \
+			for tag in $$TAGS; do \
+				GREP_EXPR="$$GREP_EXPR(?=.*@$$tag)"; \
+			done; \
+		elif echo "$$TAG_EXPR" | grep -q " or "; then \
+			TAGS=$$(echo "$$TAG_EXPR" | tr " " "\n" | grep -v "or"); \
+			for tag in $$TAGS; do \
+				GREP_EXPR="$$GREP_EXPR@$$tag|"; \
+			done; \
+			GREP_EXPR=$${GREP_EXPR%|}; \
+		else \
+			GREP_EXPR="@$$TAG_EXPR"; \
+		fi; \
+		if [ -z "$$PROJECTS" ]; then \
+			MATCHED_FILES=$$(rg -l -F --hidden --glob '!node_modules/**' --glob '!reports/**' --glob '!allure-results/**' --glob '!playwright-report/**' "$$GREP_EXPR" tests 2>/dev/null || true); \
+			for file in $$MATCHED_FILES; do \
+				add_project_from_file "$$file"; \
+			done; \
+		fi; \
+		if [ -z "$$PROJECTS" ]; then \
+			echo "No project match could be inferred for @$(TAG). Falling back to all projects."; \
+			NODE_ENV=$(ENV) npx playwright test --grep "@$(TAG)" --repeat-each=$(RCOUNT); \
+		else \
+			echo "Running tag @$(TAG) in project(s):$$PROJECTS"; \
+			for project in $$PROJECTS; do \
+				NODE_ENV=$(ENV) npx playwright test --project="$$project" --grep "@$(TAG)" --repeat-each=$(RCOUNT); \
+			done; \
+		fi; \
 	fi
 
 
@@ -124,6 +175,16 @@ allure-report:
 clean-logs:
 	rm -rf logs && mkdir logs
 
+# Clean Screenshot
+.PHONY: clean-images
+clean-images:
+	rm -rf screenshots && mkdir screenshots
+
+# Clean Electron artifacts (cached/extracted bundle)
+.PHONY: clean-electron
+clean-electron:
+	rm -rf electron
+
 .PHONY: test-metrics
 test-metrics:
 	@echo "Generating Prometheus metrics from playwright test-result.json ..."
@@ -156,6 +217,8 @@ help: ## Show all available commands
 	@echo "  playwright     - Install Playwright Chromium browser (API testing only)"
 	@echo "  setup          - Run Node.js, dependencies, and Playwright install together"
 	@echo "  build          - Type-check the project with TypeScript"
+	@echo "  prepare-electron - Prepare & cache the packaged Electron app"
+	@echo "  test-electron  - Run Electron (packaged desktop app) tests"
 	@echo "  test           - Run all Playwright tests"
 	@echo "  test-tag       - Run tests with a specific tag (usage: make test-tag TAG="quest" ;TAG="quest or stop"); TAG="quest and stop")"
 	@echo "  test-file      - Run a specific test file (usage: make test-file FILE=tests/example.spec.ts)"
@@ -165,6 +228,8 @@ help: ## Show all available commands
 	@echo "  allure-open      - Open Allure report in browser"
 	@echo "  allure-report    - Generate and open Allure report with historical data preservation"
 	@echo "  clean-logs       - Delete and recreate logs directory"
+	@echo "  clean-images     - Delete and recreate screenshots directory"
+	@echo "  clean-electron   - Delete electron directory"
 	@echo "  test-metrics     - Generates Prometheus Metrics"
 	@echo "  monitoring-up    - Starts monitoring"
 	@echo "  monitoring-down  - Stops monitoring"

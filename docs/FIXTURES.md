@@ -53,6 +53,33 @@ This hybrid approach minimizes boilerplate while providing maximum flexibility.
 | `basePage` | `BasePage` | Base page with common actions | Yes |
 | `poManager` | `POManager` | Page Object Manager | Yes |
 
+### Electron UI Test Fixtures
+
+See the [Electron Testing Guide](./ELECTRON_TESTING.md) for setup, supported
+artifact types, and where to place your packaged app.
+
+#### Core Fixtures (app-agnostic)
+
+| Fixture | Type | Description | Auto Cleanup |
+|---------|------|-------------|--------------|
+| `electronApp` | `ElectronApplication` (worker) | The launched Electron app | Yes |
+| `electronPage` | `ElectronBasePage` | Base page object wrapping the main window | Yes |
+| `appElectron` | `ElectronBasePage` | Alias for `electronPage` | Yes |
+| `appReady` | `ElectronBasePage` | `electronPage` with `waitUntilReady()` applied | Yes |
+| `electronPoManager` | `ElectronPOManager` | Registration-based Electron Page Object Manager (`register` / `get` / `has`) | Yes |
+
+#### Sample Fixtures (bundled "Pathao Resto" demo app - removable)
+
+These belong to the bundled demo application and exist so the sample Electron
+specs run out of the box. Replace them with your own page objects for a
+different app, or remove them - the core fixtures above do not depend on them.
+
+| Fixture | Type | Description | Auto Cleanup |
+|---------|------|-------------|--------------|
+| `pathaoApp` | `ElectronPathaoAppPage` | Sample "Pathao Resto" app page object | Yes |
+| `loginPage` | `ElectronLoginPage` | Sample "Pathao Resto" login page object | Yes |
+| `restoApp` | `ElectronPathaoAppPage` | Sample page object with the admin login ensured | Yes |
+
 ### Static Utilities (via BaseTest)
 
 | Utility | Access | Description |
